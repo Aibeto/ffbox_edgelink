@@ -9,12 +9,16 @@ import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  logDebug('main: 应用启动');
   Session? session;
   try {
     session = await SessionRepositoryImpl().load();
+    if (session != null) {
+      logDebug('main: 恢复会话 baseUrl=${session.baseUrl} username=${session.username}');
+    }
   } catch (e) {
     // 会话读取失败不阻塞启动，按未登录处理
-    logDebug('加载会话失败: $e');
+    logDebug('main: 加载会话失败: $e');
   }
 
   runApp(

@@ -69,6 +69,7 @@ class TaskService {
     final ids = await _repository.listTaskIds();
     sw.stop();
     final latencyMs = sw.elapsedMilliseconds;
+    logDebug('loadTasks: listTaskIds ${ids.length} 项, latency=${latencyMs}ms');
 
     final tasks = <Task>[];
     var failed = 0;
@@ -80,6 +81,7 @@ class TaskService {
         logDebug('loadTasks: task $id failed: $e');
       }
     }
+    logDebug('loadTasks done: ${tasks.length} ok, $failed failed');
     return TaskLoadResult(
       tasks: tasks,
       failedCount: failed,
@@ -139,7 +141,7 @@ class TaskService {
       await _execute(op, id);
     } on ApiException catch (e) {
       if (e.isUnauthorized) {
-        // 会话失效：标记为需登出，由 UI 统一处理跳转
+        logDebug('executeOperation id=$id op=$op -> unauthorized (401/403)');
         return TaskOperationOutcome.failed(
           e.friendlyMessage,
           unauthorized: true,
@@ -147,17 +149,25 @@ class TaskService {
       }
       // 确定性失败：服务器明确拒绝（400/403/500...）
       if (e.statusCode != null) {
+        logDebug(
+          'executeOperation id=$id op=$op -> rejected (${e.statusCode}) ${e.friendlyMessage}',
+        );
         return TaskOperationOutcome.failed(e.friendlyMessage);
       }
       // 不确定性失败：超时/连接错误 → 查询确认
+      logDebug(
+        'executeOperation id=$id op=$op -> uncertain (timeout/connection), confirming...',
+      );
       onStatus?.call('请求超时，正在确认任务状态...');
       return _confirmOperation(id, op);
-    } catch (_) {
+    } catch (e) {
+      logDebug('executeOperation id=$id op=$op -> unexpected error: $e');
       onStatus?.call('请求异常，正在确认任务状态...');
       return _confirmOperation(id, op);
     }
 
     // POST 返回 200：服务器总是返回 success，仍需查询确认实际状态
+    logDebug('executeOperation id=$id op=$op -> 200 OK, confirming...');
     onStatus?.call('正在确认任务状态...');
     return _confirmOperation(id, op);
   }
@@ -202,10 +212,13 @@ class TaskService {
       try {
         final ids = await _repository.listTaskIds();
         if (!ids.contains(id)) {
+          logDebug('confirm delete id=$id -> success (removed)');
           return TaskOperationOutcome.success('删除已生效');
         }
+        logDebug('confirm delete id=$id -> failed (still exists)');
         return TaskOperationOutcome.failed('删除未生效，任务仍存在');
-      } catch (_) {
+      } catch (e) {
+        logDebug('confirm delete id=$id -> unconfirmed: $e');
         return TaskOperationOutcome.unconfirmed('操作结果未知，请手动刷新确认');
       }
     }
@@ -214,13 +227,20 @@ class TaskService {
     try {
       final task = await _repository.getTask(id);
       if (_tookEffect(op, task.status)) {
+        logDebug(
+          'confirm op=$op id=$id -> success (status=${task.status.apiValue})',
+        );
         return TaskOperationOutcome.success(
           '操作已生效，当前状态：${task.status.apiValue}',
           confirmedTask: task,
         );
       }
+      logDebug(
+        'confirm op=$op id=$id -> failed (status=${task.status.apiValue})',
+      );
       return TaskOperationOutcome.failed('操作未生效，当前状态：${task.status.apiValue}');
-    } catch (_) {
+    } catch (e) {
+      logDebug('confirm op=$op id=$id -> unconfirmed: $e');
       return TaskOperationOutcome.unconfirmed('操作结果未知，请手动刷新确认');
     }
   }

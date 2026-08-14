@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
+import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/screens/login_screen.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
@@ -30,6 +31,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   @override
   void initState() {
     super.initState();
+    logDebug('taskListUI: initState, 启动 1s 轮询');
     _refresh();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
   }
@@ -37,6 +39,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    logDebug('taskListUI: dispose, 停止轮询');
     super.dispose();
   }
 
@@ -49,6 +52,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     try {
       final result = await ref.read(taskServiceProvider).loadTasks();
       if (!mounted) return;
+      logDebug(
+        'taskListUI: refresh ok, ${result.tasks.length} 项, latency=${result.latencyMs}ms, failed=${result.failedCount}',
+      );
       setState(() {
         _tasks = AsyncValue.data(result.tasks);
         _failedCount = result.failedCount;
@@ -57,12 +63,17 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.isUnauthorized) {
+        logDebug('taskListUI: refresh 401 -> 登出');
         await _logout();
         return;
       }
+      logDebug(
+        'taskListUI: refresh error ApiException kind=${e.kind} ${e.friendlyMessage}',
+      );
       setState(() => _tasks = AsyncValue.error(e, StackTrace.current));
     } catch (e) {
       if (!mounted) return;
+      logDebug('taskListUI: refresh error $e');
       setState(() => _tasks = AsyncValue.error(e, StackTrace.current));
     } finally {
       _refreshing = false;
@@ -70,6 +81,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   }
 
   Future<void> _logout() async {
+    logDebug('taskListUI: 用户登出');
     await ref.read(sessionRepositoryProvider).clear();
     ref.read(sessionProvider.notifier).update(null);
     if (!mounted) return;
@@ -94,6 +106,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   Future<void> _onOperation(Task task, TaskOperation op) async {
     if (_busyTaskIds.contains(task.id)) return;
     _busyTaskIds.add(task.id);
+    logDebug('taskListUI: 执行操作 id=${task.id} op=$op');
     setState(() {}); // 刷新按钮禁用态
 
     final service = ref.read(taskServiceProvider);
@@ -112,12 +125,16 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     if (!mounted) return;
 
     if (outcome.unauthorized) {
+      logDebug('taskListUI: 操作 id=${task.id} op=$op -> unauthorized, 登出');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(outcome.message)));
       await _logout();
       return;
     }
+    logDebug(
+      'taskListUI: 操作 id=${task.id} op=$op -> ${outcome.status.name}: ${outcome.message}',
+    );
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(outcome.message)));

@@ -1,3 +1,4 @@
+import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 
@@ -21,6 +22,7 @@ class AuthService {
     required String username,
     required String password,
   }) async {
+    logDebug('auth.login baseUrl=$baseUrl username=$username');
     final result = await _authRepository.login(
       baseUrl: baseUrl,
       username: username,
@@ -29,9 +31,13 @@ class AuthService {
 
     if (!result.isSuccess) {
       final message = result.isUserExist ? '密码错误' : '用户名错误';
+      logDebug(
+        'auth.login failed: $message (isUserExist=${result.isUserExist})',
+      );
       return AuthOutcome.failure(message);
     }
 
+    logDebug('auth.login success: sessionId=${result.sessionId}');
     return AuthOutcome.success(
       Session(
         baseUrl: baseUrl,

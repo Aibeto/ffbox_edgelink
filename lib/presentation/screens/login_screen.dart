@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
+import 'package:ffbox_edgelink/core/utils/log.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -49,6 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
+    logDebug('loginUI: 提交登录 baseUrl=$baseUrl username=$username');
     setState(() {
       _loading = true;
       _error = null;
@@ -62,6 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       if (outcome.error != null) {
+        logDebug('loginUI: 登录失败 - ${outcome.error}');
         setState(() {
           _loading = false;
           _error = outcome.error;
@@ -74,11 +77,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(serverRepositoryProvider)
           .save(ServerProfile(baseUrl: baseUrl, username: username));
       await ref.read(sessionRepositoryProvider).save(session);
-      // 更新会话后由 FFBoxApp 的 home 切换自动进入任务列表页，
-      // 无需手动导航。
+      logDebug('loginUI: 登录成功，保存会话并切换到任务列表');
       ref.read(sessionProvider.notifier).update(session);
     } on ApiException catch (e) {
       if (!mounted) return;
+      logDebug(
+        'loginUI: 登录异常 ApiException kind=${e.kind} msg=${e.friendlyMessage}',
+      );
       setState(() {
         _loading = false;
         _error = e.kind == ApiErrorKind.timeout
@@ -87,6 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      logDebug('loginUI: 登录异常 $e');
       setState(() {
         _loading = false;
         _error = '登录失败：$e';
