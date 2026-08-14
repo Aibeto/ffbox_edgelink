@@ -55,11 +55,10 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
       setState(() => _tasks = const AsyncValue.loading());
     }
     try {
-      final result = await ref.read(taskServiceProvider).loadTasks();
+      final result = await ref
+          .read(taskServiceProvider)
+          .loadTasks(silent: true);
       if (!mounted) return;
-      logDebug(
-        'taskListUI: refresh ok, ${result.tasks.length} 项, latency=${result.latencyMs}ms, failed=${result.failedCount}',
-      );
       setState(() {
         _tasks = AsyncValue.data(result.tasks);
         _failedCount = result.failedCount;
@@ -169,7 +168,6 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     final deviceName = _hostOf(session?.baseUrl);
 
     return Scaffold(
-      backgroundColor: AkColors.canvas,
       appBar: _AkAppBar(
         title: deviceName,
         latencyMs: _latencyMs,
@@ -185,7 +183,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: const BoxDecoration(
-                color: AkColors.panel,
+                color: AkColors.oledDark,
                 border: Border(
                   bottom: BorderSide(
                     color: AkColors.border,
@@ -325,7 +323,7 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
       height: preferredSize.height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
-        color: AkColors.panel,
+        color: AkColors.oledDark,
         border: Border(
           bottom: BorderSide(color: AkColors.border, width: AkTheme.strongLine),
         ),

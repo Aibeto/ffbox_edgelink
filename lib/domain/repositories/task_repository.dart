@@ -5,10 +5,16 @@ import 'package:ffbox_edgelink/domain/entities/task.dart';
 abstract interface class TaskRepository {
   /// 获取任务 ID 列表（支持分页）。
   /// [offset] 起始条目（从 0 开始），[size] 每页返回数量。
-  Future<List<int>> listTaskIds({int offset = 0, int size = 100});
+  /// [silent] 为 true 时不记录请求/响应日志。
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  });
 
   /// 获取单个任务详情。
-  Future<Task> getTask(int id);
+  /// [silent] 为 true 时不记录请求/响应日志。
+  Future<Task> getTask(int id, {bool silent = false});
 
   /// 批量操作（启动、暂停、继续、删除、排队、重置）。
   Future<void> deleteTasks(List<int> ids);

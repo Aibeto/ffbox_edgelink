@@ -6,8 +6,17 @@ import 'package:flutter/foundation.dart';
 /// 仅当 [kDebugMode] 为 true 时输出日志（带时间戳）。
 void logDebug(String message) {
   if (kDebugMode) {
-    final time = DateTime.now().toIso8601String();
+    final now = DateTime.now();
+    final date =
+        '${now.year}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}';
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}'
+        '${now.second.toString().padLeft(2, '0')}'
+        '.${now.millisecond.toString().padLeft(3, '0')}';
     // ignore: avoid_print
-    print('[FFBox EdgeLink] $time $message');
+    print('[FFBox EdgeLink] ${date}T${time} $message');
   }
 }

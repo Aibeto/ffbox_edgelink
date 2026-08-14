@@ -59,7 +59,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     try {
       final task = await ref
           .read(taskRepositoryProvider)
-          .getTask(widget.taskId);
+          .getTask(widget.taskId, silent: true);
       sw.stop();
       if (!mounted) return;
       logDebug(
@@ -172,7 +172,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Widget build(BuildContext context) {
     final task = _task;
     return Scaffold(
-      backgroundColor: AkColors.canvas,
       appBar: _buildAppBar(task),
       body: task == null
           ? const Center(
@@ -204,7 +203,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: const BoxDecoration(
-          color: AkColors.panel,
+          color: AkColors.oledDark,
           border: Border(
             bottom: BorderSide(
               color: AkColors.border,
@@ -292,15 +291,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              StatusBadge(status: task.status),
-              const SizedBox(width: 10),
-              Text(
-                '任务 #${task.id}',
-                style: AkTheme.mono(
-                  fontSize: 11,
-                  color: AkColors.textSecondary,
-                ),
-              ),
+              // StatusBadge(status: task.status),
+              // const SizedBox(width: 10),
+              // Text(
+              //   '任务 #${task.id}',
+              //   style: AkTheme.mono(
+              //     fontSize: 11,
+              //     color: AkColors.textSecondary,
+              //   ),
+              // ),
             ],
           ),
           if (showProgress) ...[

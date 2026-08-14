@@ -38,8 +38,9 @@ class ApiClient {
     Map<String, dynamic>? query,
     Object? data,
     bool retryOnFailure = false,
+    bool silent = false,
   }) async {
-    logDebug('$method $path');
+    if (!silent) logDebug('$method $path');
     var attempt = 0;
     while (true) {
       try {
@@ -49,9 +50,11 @@ class ApiClient {
           data: data,
           options: Options(method: method),
         );
-        logDebug(
-          '$method $path -> ${response.statusCode} (${response.data.runtimeType})',
-        );
+        if (!silent) {
+          logDebug(
+            '$method $path -> ${response.statusCode} (${response.data.runtimeType})',
+          );
+        }
 
         // 将原始响应数据写入文件日志（不输出到控制台，避免敏感信息泄露）
         await fileLogger.logRawData(

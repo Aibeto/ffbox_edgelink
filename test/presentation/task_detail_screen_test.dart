@@ -13,11 +13,14 @@ class _FakeTaskRepo implements TaskRepository {
   int getTaskCalls = 0;
 
   @override
-  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) async =>
-      const [0];
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  }) async => const [0];
 
   @override
-  Future<Task> getTask(int id) async {
+  Future<Task> getTask(int id, {bool silent = false}) async {
     getTaskCalls++;
     return Task(
       id: id,

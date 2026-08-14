@@ -8,11 +8,15 @@ class TaskRepositoryImpl implements TaskRepository {
   TaskRepositoryImpl(this._api);
 
   @override
-  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) =>
-      _api.listTaskIds(offset: offset, size: size);
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  }) => _api.listTaskIds(offset: offset, size: size, silent: silent);
 
   @override
-  Future<Task> getTask(int id) => _api.getTask(id);
+  Future<Task> getTask(int id, {bool silent = false}) =>
+      _api.getTask(id, silent: silent);
 
   @override
   Future<void> deleteTasks(List<int> ids) => _api.deleteTasks(ids);

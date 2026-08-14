@@ -75,6 +75,9 @@ class AkColors {
 
   static const Color border = Color(0xFF30363D);
   static const Color borderMuted = Color(0xFF21262D);
+
+  /// OLED 纯黑背景
+  static const Color oledDark = Color(0xFF000000);
 }
 
 /// ak-ui design language theme — system fonts for full CJK support.
@@ -159,7 +162,7 @@ class AkTheme {
 
   static ThemeData get dark => ThemeData(
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: AkColors.canvas,
+    scaffoldBackgroundColor: AkColors.oledDark,
     useMaterial3: true,
     colorScheme: const ColorScheme.dark(
       surface: AkColors.panel,

@@ -16,6 +16,14 @@ class FFBoxApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AkTheme.dark,
       themeMode: ThemeMode.dark,
+      builder: (context, child) => ColoredBox(
+        color: AkColors.oledDark,
+        child: SafeArea(
+          top: true,
+          bottom: false,
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
       home: session == null ? const LoginScreen() : const TaskListScreen(),
     );
   }

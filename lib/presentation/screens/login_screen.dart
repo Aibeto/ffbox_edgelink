@@ -202,7 +202,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             color: AkColors.textPrimary,
                           ),
                           decoration: const InputDecoration(
-                            hintText: 'http://192.168.1.100:33269',
+                            hintText: 'http(s)://server-address:port',
                           ),
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) {

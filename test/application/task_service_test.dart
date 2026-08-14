@@ -6,12 +6,13 @@ import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
 
 class _FakeTaskRepo implements TaskRepository {
   @override
-  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) async => [
-    1,
-    2,
-  ];
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  }) async => [1, 2];
   @override
-  Future<Task> getTask(int id) async =>
+  Future<Task> getTask(int id, {bool silent = false}) async =>
       Task(taskName: 't$id', status: TaskStatus.idle);
   @override
   Future<void> deleteTasks(List<int> ids) async {}

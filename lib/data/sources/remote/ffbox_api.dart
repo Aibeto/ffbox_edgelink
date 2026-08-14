@@ -24,16 +24,23 @@ class FFBoxApi {
 
   /// 获取任务 ID 列表（分页）。
   /// [offset] 起始条目（从 0 开始），[size] 每页返回数量。
-  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) async {
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  }) async {
     final data = await _client.request<Map<String, dynamic>>(
       method: 'GET',
       path: _url('/api/v1/tasks'),
       query: {'offset': offset, 'size': size, 'idOnly': true},
       retryOnFailure: true,
+      silent: silent,
     );
-    logDebug(
-      'listTaskIds: offset=$offset, size=$size, totalCount=${data['totalCount']}',
-    );
+    if (!silent) {
+      logDebug(
+        'listTaskIds: offset=$offset, size=$size, totalCount=${data['totalCount']}',
+      );
+    }
     // 格式 1: {taskIds: [1, 2, 3], totalCount: N}
     final taskIds = data['taskIds'];
     if (taskIds is List) {
@@ -52,11 +59,12 @@ class FFBoxApi {
     return [];
   }
 
-  Future<Task> getTask(int id) async {
+  Future<Task> getTask(int id, {bool silent = false}) async {
     final json = await _client.request<Map<String, dynamic>>(
       method: 'GET',
       path: _url('/api/v1/tasks/$id'),
       retryOnFailure: true,
+      silent: silent,
     );
     return Task.fromJson(json);
   }

@@ -67,7 +67,7 @@ class TaskService {
   static const int _pageSize = 100;
 
   /// 拉取全部任务：分页获取 ID 列表，再逐条取详情。
-  Future<TaskLoadResult> loadTasks() async {
+  Future<TaskLoadResult> loadTasks({bool silent = false}) async {
     final sw = Stopwatch()..start();
 
     // 分页获取所有任务 ID
@@ -77,30 +77,28 @@ class TaskService {
       final ids = await _repository.listTaskIds(
         offset: offset,
         size: _pageSize,
+        silent: silent,
       );
       allIds.addAll(ids);
-      logDebug(
-        'loadTasks: offset=$offset, 本页${ids.length}项, 累计${allIds.length}项',
-      );
       if (ids.length < _pageSize) break;
       offset += _pageSize;
     }
 
     sw.stop();
     final latencyMs = sw.elapsedMilliseconds;
-    logDebug('loadTasks: 共${allIds.length}项, latency=${latencyMs}ms');
 
     final tasks = <Task>[];
     var failed = 0;
     for (final id in allIds) {
       try {
-        tasks.add(await _repository.getTask(id));
+        tasks.add(await _repository.getTask(id, silent: silent));
       } catch (e) {
         failed++;
-        logDebug('loadTasks: task $id failed: $e');
       }
     }
-    logDebug('loadTasks done: ${tasks.length} ok, $failed failed');
+    logDebug(
+      'loadTasks: ${tasks.length} latency=${latencyMs}ms failed=$failed',
+    );
     return TaskLoadResult(
       tasks: tasks,
       failedCount: failed,

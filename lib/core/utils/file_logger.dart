@@ -29,6 +29,19 @@ class FileLogger {
 
   FileLogger._();
 
+  /// 将 [DateTime] 格式化为紧凑 ISO 8601 字符串（无分隔符）。
+  /// 例：20260815T000232.111
+  String _formatTimestamp(DateTime dt) {
+    final y = dt.year;
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    final s = dt.second.toString().padLeft(2, '0');
+    final ms = dt.millisecond.toString().padLeft(3, '0');
+    return '${y}${m}${d}T${h}${min}${s}.$ms';
+  }
+
   /// 初始化日志目录和文件。
   ///
   /// 必须在应用启动时调用，通常在 main() 中。
@@ -60,7 +73,7 @@ class FileLogger {
         await _logDir!.create(recursive: true);
       }
 
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final timestamp = _formatTimestamp(DateTime.now());
       _logFile = File('${_logDir!.path}/app_$timestamp.log');
       _rawDataFile = File('${_logDir!.path}/raw_data_$timestamp.log');
 
@@ -87,7 +100,7 @@ class FileLogger {
       print('[FFBox EdgeLink] $message');
     }
 
-    final timestamp = DateTime.now().toIso8601String();
+    final timestamp = _formatTimestamp(DateTime.now());
     final logEntry = '[$timestamp] $message';
 
     // 写入内存缓冲区
@@ -109,7 +122,7 @@ class FileLogger {
   }) async {
     final buffer = StringBuffer();
     buffer.writeln('=== 原始响应数据 ===');
-    buffer.writeln('时间: ${DateTime.now().toIso8601String()}');
+    buffer.writeln('时间: ${_formatTimestamp(DateTime.now())}');
     buffer.writeln('端点: $endpoint');
     buffer.writeln('方法: $method');
     if (statusCode != null) {
@@ -140,7 +153,7 @@ class FileLogger {
   ]) async {
     final buffer = StringBuffer();
     buffer.writeln('=== 错误日志 ===');
-    buffer.writeln('时间: ${DateTime.now().toIso8601String()}');
+    buffer.writeln('时间: ${_formatTimestamp(DateTime.now())}');
     buffer.writeln('消息: $message');
     if (error != null) {
       buffer.writeln('错误: $error');
@@ -171,7 +184,7 @@ class FileLogger {
   }) async {
     final buffer = StringBuffer();
     buffer.writeln('=== 任务解析日志 ===');
-    buffer.writeln('时间: ${DateTime.now().toIso8601String()}');
+    buffer.writeln('时间: ${_formatTimestamp(DateTime.now())}');
     buffer.writeln('端点: $endpoint');
     buffer.writeln('原始数据类型: ${rawData.runtimeType}');
     buffer.writeln('原始数据内容: $rawData');
@@ -252,7 +265,7 @@ class FileLogger {
       }
       if (groups.length <= keep) return;
 
-      // ISO8601 时间戳字典序即时间序，删除最旧的超量组
+      // 字典序即时间序，删除最旧的超量组
       final timestamps = groups.keys.toList()..sort();
       final toDelete = timestamps.take(timestamps.length - keep);
       for (final ts in toDelete) {

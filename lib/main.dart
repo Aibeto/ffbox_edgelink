@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/app.dart';
 import 'package:ffbox_edgelink/core/config/app_config.dart';
@@ -10,6 +11,17 @@ import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Android 状态栏/导航栏：透明背景 + 浅色图标，由 Scaffold 背景色填充状态栏区域
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // 初始化文件日志系统
   await fileLogger.init();
