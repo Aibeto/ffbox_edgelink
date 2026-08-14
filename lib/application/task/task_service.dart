@@ -166,7 +166,6 @@ class TaskService {
     TaskOperation op, {
     void Function(String message)? onStatus,
   }) async {
-    onStatus?.call('正在${_verb(op)}...');
     try {
       await _execute(op, id);
     } on ApiException catch (e) {
@@ -207,16 +206,6 @@ class TaskService {
     TaskOperation.ready => _repository.readyTasks([id]),
     TaskOperation.reset => _repository.resetTasks([id]),
     _ => Future.value(),
-  };
-
-  String _verb(TaskOperation op) => switch (op) {
-    TaskOperation.start => '启动',
-    TaskOperation.pause => '暂停',
-    TaskOperation.resume => '继续',
-    TaskOperation.delete => '删除',
-    TaskOperation.ready => '排队',
-    TaskOperation.reset => '重置',
-    _ => '操作',
   };
 
   bool _tookEffect(TaskOperation op, TaskStatus status) => switch (op) {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/screens/login_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_list_screen.dart';
+import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 
 class FFBoxApp extends ConsumerWidget {
   const FFBoxApp({super.key});
@@ -12,9 +13,9 @@ class FFBoxApp extends ConsumerWidget {
     final session = ref.watch(sessionProvider);
     return MaterialApp(
       title: 'FFBox EdgeLink',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: AkTheme.dark,
+      themeMode: ThemeMode.dark,
       home: session == null ? const LoginScreen() : const TaskListScreen(),
     );
   }

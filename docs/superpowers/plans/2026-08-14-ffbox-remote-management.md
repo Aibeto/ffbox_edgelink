@@ -1960,7 +1960,7 @@ git commit -m "feat: FFBox EdgeLink remote management app"
 
 以下为后续追加的 4 项需求，插入到原方案中执行。
 
-### 追加 A：调试日志工具（KDEBUGMODE）
+### 追加 A：调试日志工具（kDebugMode）
 
 **Files:**
 
@@ -1975,11 +1975,11 @@ git commit -m "feat: FFBox EdgeLink remote management app"
 import 'package:flutter/foundation.dart';
 
 /// 调试开关：debug 构建为 true，release 构建为 false。
-const bool KDEBUGMODE = kDebugMode;
+const bool kDebugMode = kDebugMode;
 
-/// 仅当 [KDEBUGMODE] 为 true 时输出日志。
+/// 仅当 [kDebugMode] 为 true 时输出日志。
 void logDebug(String message) {
-  if (KDEBUGMODE) {
+  if (kDebugMode) {
     // ignore: avoid_print
     print('[FFBox EdgeLink] $message');
   }
@@ -2039,7 +2039,7 @@ void logDebug(String message) {
 
 ```bash
 git add lib/core/utils/log.dart lib/core/network/api_client.dart lib/data/repositories/auth_repository_impl.dart lib/application/task/task_service.dart
-git commit -m "feat: add KDEBUGMODE-gated debug logging"
+git commit -m "feat: add kDebugMode-gated debug logging"
 ```
 
 ### 追加 B：服务器数据持久化增强
@@ -2192,7 +2192,7 @@ git commit -m "feat: add Windows desktop platform"
 
 将 Task 14 的验证方式调整为：
 
-- **默认本机调试**：`flutter run -d windows`（debug 模式，打印 KDEBUGMODE 日志）。
+- **默认本机调试**：`flutter run -d windows`（debug 模式，打印 kDebugMode 日志）。
 - **Web**：`flutter run -d chrome`（可选）。
 - **Android**：由人工在真机/模拟器手动验证，不做自动化设备测试。
 - 手动验证登录时，服务器地址在 Windows 本机调试可填 `http://localhost:33269` 或宿主机局域网 IP。
@@ -2896,7 +2896,7 @@ git commit -m "feat: show device name and network latency in task list"
 - 解耦模块：domain/application 为纯 Dart，presentation 仅 Riverpod 粘合，状态机可复用于 Bloc。
 - 预留全部操作接入：Task 2 `TaskOperation` 枚举 + Task 4 `TaskRepository` 接口声明全部操作。
 - 服务器数据持久化：追加 B（`ServerProfile` + `ServerRepository`）覆盖，登录页回填最近地址/用户名。
-- KDEBUGMODE 调试打印：追加 A（`logDebug`）覆盖，仅 debug 构建输出。
+- kDebugMode 调试打印：追加 A（`logDebug`）覆盖，仅 debug 构建输出。
 - Windows 默认调试 + Android 人工测试：追加 C/D 覆盖。
 - 网络延迟/丢包/单通/会话失效：追加 E 覆盖（超时配置、幂等 GET 重试、错误分类、部分失败容忍、401 跳转）。
 - 写操作超时不确定性/兜底确认：追加 F 覆盖（查询确认 + 三态结果 + 阶段提示，应对「200 也不一定生效」与「超时结果未知」）。

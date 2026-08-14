@@ -42,6 +42,6 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('demo'), findsOneWidget);
-    expect(find.text('状态：idle'), findsOneWidget);
+    expect(find.text('空闲'), findsOneWidget);
   });
 }

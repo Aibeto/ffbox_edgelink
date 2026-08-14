@@ -44,8 +44,9 @@ class FileLogger {
       Directory appDir;
 
       if (Platform.isWindows) {
-        // Windows：使用 exe 所在目录
-        appDir = Directory.current;
+        // Windows：使用 exe 所在目录（非工作目录）
+        final exePath = File(Platform.resolvedExecutable).parent;
+        appDir = exePath;
       } else if (Platform.isAndroid) {
         // Android：使用缓存目录
         appDir = await getTemporaryDirectory();
@@ -229,21 +230,34 @@ class FileLogger {
     return null;
   }
 
-  /// 清理旧日志文件（保留最近 7 天）。
-  Future<void> cleanOldLogs() async {
+  /// 清理旧日志文件，仅保留最新 [keep] 套（每套 = 同时间戳的 app 日志与原始数据日志）。
+  Future<void> cleanOldLogs({int keep = 5}) async {
     try {
       if (_logDir == null || !await _logDir!.exists()) return;
 
-      final now = DateTime.now();
-      final files = await _logDir!.list().toList();
+      final logFiles = (await _logDir!.list().toList())
+          .whereType<File>()
+          .where((f) => f.path.toLowerCase().endsWith('.log'))
+          .toList();
+      if (logFiles.length <= keep) return;
 
-      for (final file in files) {
-        if (file is File) {
-          final stat = await file.stat();
-          final age = now.difference(stat.modified);
-          if (age.inDays > 7) {
-            await file.delete();
-          }
+      // 按文件名时间戳分组：app_xxx.log 与 raw_data_xxx.log 共享同一时间戳
+      final tsPattern = RegExp(r'^(?:app|raw_data)_(.*?)\.log$');
+      final groups = <String, List<File>>{};
+      for (final f in logFiles) {
+        final name = f.uri.pathSegments.last;
+        final m = tsPattern.firstMatch(name);
+        if (m == null) continue;
+        groups.putIfAbsent(m.group(1)!, () => []).add(f);
+      }
+      if (groups.length <= keep) return;
+
+      // ISO8601 时间戳字典序即时间序，删除最旧的超量组
+      final timestamps = groups.keys.toList()..sort();
+      final toDelete = timestamps.take(timestamps.length - keep);
+      for (final ts in toDelete) {
+        for (final f in groups[ts]!) {
+          await f.delete();
         }
       }
     } catch (e) {

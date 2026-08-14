@@ -17,31 +17,61 @@ class _FakeAuthRepo implements AuthRepository {
 
 void main() {
   test('login returns error message when user not exist', () async {
-    final service = AuthService(_FakeAuthRepo(
-      const LoginResult(isUserExist: false, isSuccess: false),
-    ));
+    final service = AuthService(
+      _FakeAuthRepo(const LoginResult(isUserExist: false, isSuccess: false)),
+    );
     final outcome = await service.login(
-        baseUrl: 'http://x', username: 'u', password: 'p');
+      baseUrl: 'http://x',
+      username: 'u',
+      password: 'p',
+    );
     expect(outcome.error, '用户名错误');
     expect(outcome.session, isNull);
   });
 
   test('login returns error message when password wrong', () async {
-    final service = AuthService(_FakeAuthRepo(
-      const LoginResult(isUserExist: true, isSuccess: false),
-    ));
+    final service = AuthService(
+      _FakeAuthRepo(const LoginResult(isUserExist: true, isSuccess: false)),
+    );
     final outcome = await service.login(
-        baseUrl: 'http://x', username: 'u', password: 'p');
+      baseUrl: 'http://x',
+      username: 'u',
+      password: 'p',
+    );
     expect(outcome.error, '密码错误');
   });
 
   test('login returns session on success', () async {
-    final service = AuthService(_FakeAuthRepo(
-      const LoginResult(isUserExist: true, isSuccess: true, sessionId: 'abc'),
-    ));
+    final service = AuthService(
+      _FakeAuthRepo(
+        const LoginResult(isUserExist: true, isSuccess: true, sessionId: 'abc'),
+      ),
+    );
     final outcome = await service.login(
-        baseUrl: 'http://x', username: 'u', password: 'p');
+      baseUrl: 'http://x',
+      username: 'u',
+      password: 'p',
+    );
     expect(outcome.error, isNull);
     expect(outcome.session?.sessionId, 'abc');
+  });
+
+  test('localhost with empty credentials uses real login response', () async {
+    final service = AuthService(
+      _FakeAuthRepo(
+        const LoginResult(
+          isUserExist: true,
+          isSuccess: true,
+          sessionId: 'real-session',
+        ),
+      ),
+    );
+    final outcome = await service.login(
+      baseUrl: 'http://127.0.0.1:33269',
+      username: '',
+      password: '',
+    );
+    expect(outcome.error, isNull);
+    expect(outcome.session?.sessionId, 'real-session');
   });
 }

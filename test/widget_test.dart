@@ -5,6 +5,6 @@ import 'package:ffbox_edgelink/app.dart';
 void main() {
   testWidgets('app boots to login screen when no session', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: FFBoxApp()));
-    expect(find.text('FFBox EdgeLink'), findsOneWidget);
+    expect(find.text('FFBox'), findsOneWidget);
   });
 }
