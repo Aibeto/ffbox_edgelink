@@ -17,6 +17,6 @@ void logDebug(String message) {
         '${now.second.toString().padLeft(2, '0')}'
         '.${now.millisecond.toString().padLeft(3, '0')}';
     // ignore: avoid_print
-    print('[FFBox EdgeLink] ${date}T${time} $message');
+    print('[FFBox EdgeLink] ${date}T$time $message');
   }
 }

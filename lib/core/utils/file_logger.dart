@@ -39,7 +39,7 @@ class FileLogger {
     final min = dt.minute.toString().padLeft(2, '0');
     final s = dt.second.toString().padLeft(2, '0');
     final ms = dt.millisecond.toString().padLeft(3, '0');
-    return '${y}${m}${d}T${h}${min}${s}.$ms';
+    return '$y$m${d}T$h$min$s.$ms';
   }
 
   /// 初始化日志目录和文件。
