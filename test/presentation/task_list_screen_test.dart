@@ -1,0 +1,46 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ffbox_edgelink/application/task/task_service.dart';
+import 'package:ffbox_edgelink/domain/entities/task.dart';
+import 'package:ffbox_edgelink/domain/entities/task_status.dart';
+import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
+import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
+import 'package:ffbox_edgelink/presentation/screens/task_list_screen.dart';
+
+class _FakeTaskRepo implements TaskRepository {
+  @override
+  Future<List<int>> listTaskIds() async => [1];
+  @override
+  Future<Task> getTask(int id) async =>
+      Task(id: id, taskName: 'demo', status: TaskStatus.idle);
+  @override
+  Future<int> createTask({required String taskName, Map<String, dynamic>? outputParams}) async => 0;
+  @override
+  Future<void> deleteTask(int id) async {}
+  @override
+  Future<void> startTask(int id) async {}
+  @override
+  Future<void> readyTask(int id) async {}
+  @override
+  Future<void> pauseTask(int id) async {}
+  @override
+  Future<void> resumeTask(int id) async {}
+  @override
+  Future<void> resetTask(int id) async {}
+}
+
+void main() {
+  testWidgets('renders task name and status', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        taskServiceProvider
+            .overrideWith((ref) => TaskService(_FakeTaskRepo())),
+      ],
+      child: const MaterialApp(home: TaskListScreen()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('demo'), findsOneWidget);
+    expect(find.text('状态：idle'), findsOneWidget);
+  });
+}
