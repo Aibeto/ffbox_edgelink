@@ -14,7 +14,9 @@ Future<void> main() async {
   try {
     session = await SessionRepositoryImpl().load();
     if (session != null) {
-      logDebug('main: 恢复会话 baseUrl=${session.baseUrl} username=${session.username}');
+      logDebug(
+        'main: 恢复会话 baseUrl=${session.baseUrl} username=${session.username}',
+      );
     }
   } catch (e) {
     // 会话读取失败不阻塞启动，按未登录处理
@@ -25,9 +27,7 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         if (session != null) ...[
-          sessionProvider.overrideWith(
-            () => SessionNotifier()..update(session!),
-          ),
+          sessionProvider.overrideWith(() => SessionNotifier.initial(session!)),
           appConfigProvider.overrideWith(
             (ref) => AppConfig(baseUrl: session!.baseUrl),
           ),

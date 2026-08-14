@@ -18,10 +18,22 @@ final appConfigProvider = Provider<AppConfig>((ref) => AppConfig());
 
 /// 当前会话（登录成功写入，登出清空）。
 class SessionNotifier extends Notifier<Session?> {
-  @override
-  Session? build() => null;
+  Session? _initial;
 
-  void update(Session? session) => state = session;
+  /// 默认构造（未登录状态）。
+  SessionNotifier();
+
+  /// 恢复会话：通过传入初始值，由 build() 直接返回，
+  /// 避免在 Notifier 未初始化时调用 state。
+  SessionNotifier.initial(Session session) : _initial = session;
+
+  @override
+  Session? build() => _initial;
+
+  void update(Session? session) {
+    _initial = null; // 仅首次 build 使用
+    state = session;
+  }
 }
 
 final sessionProvider = NotifierProvider<SessionNotifier, Session?>(
