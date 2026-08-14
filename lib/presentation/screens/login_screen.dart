@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
-import 'package:ffbox_edgelink/presentation/screens/task_list_screen.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -75,17 +74,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(serverRepositoryProvider)
           .save(ServerProfile(baseUrl: baseUrl, username: username));
       await ref.read(sessionRepositoryProvider).save(session);
+      // 更新会话后由 FFBoxApp 的 home 切换自动进入任务列表页，
+      // 无需手动导航。
       ref.read(sessionProvider.notifier).update(session);
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const TaskListScreen()),
-      );
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.statusCode == null
+        _error = e.kind == ApiErrorKind.timeout
             ? '连接超时，无法确认是否登录成功，请重试'
             : e.friendlyMessage;
       });

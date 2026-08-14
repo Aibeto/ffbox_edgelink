@@ -27,14 +27,31 @@ class TaskOperationOutcome {
   final String message;
   final Task? confirmedTask;
 
-  const TaskOperationOutcome._(this.status, this.message, {this.confirmedTask});
+  /// 会话失效（401/403），UI 应触发登出跳转。
+  final bool unauthorized;
+
+  const TaskOperationOutcome._(
+    this.status,
+    this.message, {
+    this.confirmedTask,
+    this.unauthorized = false,
+  });
 
   factory TaskOperationOutcome.success(String message, {Task? confirmedTask}) =>
-      TaskOperationOutcome._(OperationOutcomeStatus.success, message,
-          confirmedTask: confirmedTask);
+      TaskOperationOutcome._(
+        OperationOutcomeStatus.success,
+        message,
+        confirmedTask: confirmedTask,
+      );
 
-  factory TaskOperationOutcome.failed(String message) =>
-      TaskOperationOutcome._(OperationOutcomeStatus.failed, message);
+  factory TaskOperationOutcome.failed(
+    String message, {
+    bool unauthorized = false,
+  }) => TaskOperationOutcome._(
+    OperationOutcomeStatus.failed,
+    message,
+    unauthorized: unauthorized,
+  );
 
   factory TaskOperationOutcome.unconfirmed(String message) =>
       TaskOperationOutcome._(OperationOutcomeStatus.unconfirmed, message);
@@ -63,7 +80,11 @@ class TaskService {
         logDebug('loadTasks: task $id failed: $e');
       }
     }
-    return TaskLoadResult(tasks: tasks, failedCount: failed, latencyMs: latencyMs);
+    return TaskLoadResult(
+      tasks: tasks,
+      failedCount: failed,
+      latencyMs: latencyMs,
+    );
   }
 
   /// 判断某状态是否可执行某操作。
@@ -100,8 +121,10 @@ class TaskService {
     return _repository.resetTask(id);
   }
 
-  Future<int> create({required String taskName, Map<String, dynamic>? outputParams}) =>
-      _repository.createTask(taskName: taskName, outputParams: outputParams);
+  Future<int> create({
+    required String taskName,
+    Map<String, dynamic>? outputParams,
+  }) => _repository.createTask(taskName: taskName, outputParams: outputParams);
 
   /// 执行任务操作并给出三态结果。
   ///
@@ -115,7 +138,14 @@ class TaskService {
     try {
       await _execute(op, id);
     } on ApiException catch (e) {
-      // 确定性失败：服务器明确拒绝（400/401/403/500...）
+      if (e.isUnauthorized) {
+        // 会话失效：标记为需登出，由 UI 统一处理跳转
+        return TaskOperationOutcome.failed(
+          e.friendlyMessage,
+          unauthorized: true,
+        );
+      }
+      // 确定性失败：服务器明确拒绝（400/403/500...）
       if (e.statusCode != null) {
         return TaskOperationOutcome.failed(e.friendlyMessage);
       }
@@ -133,37 +163,40 @@ class TaskService {
   }
 
   Future<void> _execute(TaskOperation op, int id) => switch (op) {
-        TaskOperation.start => _repository.startTask(id),
-        TaskOperation.pause => _repository.pauseTask(id),
-        TaskOperation.resume => _repository.resumeTask(id),
-        TaskOperation.delete => _repository.deleteTask(id),
-        TaskOperation.ready => _repository.readyTask(id),
-        TaskOperation.reset => _repository.resetTask(id),
-        _ => Future.value(),
-      };
+    TaskOperation.start => _repository.startTask(id),
+    TaskOperation.pause => _repository.pauseTask(id),
+    TaskOperation.resume => _repository.resumeTask(id),
+    TaskOperation.delete => _repository.deleteTask(id),
+    TaskOperation.ready => _repository.readyTask(id),
+    TaskOperation.reset => _repository.resetTask(id),
+    _ => Future.value(),
+  };
 
   String _verb(TaskOperation op) => switch (op) {
-        TaskOperation.start => '启动',
-        TaskOperation.pause => '暂停',
-        TaskOperation.resume => '继续',
-        TaskOperation.delete => '删除',
-        TaskOperation.ready => '排队',
-        TaskOperation.reset => '重置',
-        _ => '操作',
-      };
+    TaskOperation.start => '启动',
+    TaskOperation.pause => '暂停',
+    TaskOperation.resume => '继续',
+    TaskOperation.delete => '删除',
+    TaskOperation.ready => '排队',
+    TaskOperation.reset => '重置',
+    _ => '操作',
+  };
 
   bool _tookEffect(TaskOperation op, TaskStatus status) => switch (op) {
-        TaskOperation.start => status == TaskStatus.running,
-        TaskOperation.pause => status == TaskStatus.paused,
-        TaskOperation.resume => status == TaskStatus.running,
-        TaskOperation.ready =>
-          status == TaskStatus.idleQueued || status == TaskStatus.pausedQueued,
-        TaskOperation.reset => status == TaskStatus.idle,
-        TaskOperation.delete => false, // delete 单独处理
-        _ => true,
-      };
+    TaskOperation.start => status == TaskStatus.running,
+    TaskOperation.pause => status == TaskStatus.paused,
+    TaskOperation.resume => status == TaskStatus.running,
+    TaskOperation.ready =>
+      status == TaskStatus.idleQueued || status == TaskStatus.pausedQueued,
+    TaskOperation.reset => status == TaskStatus.idle,
+    TaskOperation.delete => false, // delete 单独处理
+    _ => true,
+  };
 
-  Future<TaskOperationOutcome> _confirmOperation(int id, TaskOperation op) async {
+  Future<TaskOperationOutcome> _confirmOperation(
+    int id,
+    TaskOperation op,
+  ) async {
     // 删除：通过「任务是否还在列表中」确认
     if (op == TaskOperation.delete) {
       try {

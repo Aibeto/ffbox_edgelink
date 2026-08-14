@@ -22,6 +22,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   Timer? _pollTimer;
   bool _refreshing = false;
 
+  /// 正在执行操作的任务 ID 集合，防止重复点击导致并发请求。
+  final Set<int> _busyTaskIds = {};
+
   static const _pollInterval = Duration(seconds: 1);
 
   @override
@@ -89,6 +92,10 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   }
 
   Future<void> _onOperation(Task task, TaskOperation op) async {
+    if (_busyTaskIds.contains(task.id)) return;
+    _busyTaskIds.add(task.id);
+    setState(() {}); // 刷新按钮禁用态
+
     final service = ref.read(taskServiceProvider);
     final outcome = await service.executeOperation(
       task.id,
@@ -100,10 +107,21 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         ).showSnackBar(SnackBar(content: Text(msg)));
       },
     );
+
+    _busyTaskIds.remove(task.id);
     if (!mounted) return;
+
+    if (outcome.unauthorized) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(outcome.message)));
+      await _logout();
+      return;
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(outcome.message)));
+    setState(() {}); // 恢复按钮可用态
     await _refresh();
   }
 
@@ -149,6 +167,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         final task = tasks[i];
                         return TaskTile(
                           task: task,
+                          disabled: _busyTaskIds.contains(task.id),
                           onOperation: (op) => _onOperation(task, op),
                         );
                       },

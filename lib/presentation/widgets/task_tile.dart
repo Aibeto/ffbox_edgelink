@@ -16,7 +16,15 @@ class TaskTile extends StatelessWidget {
   final Task task;
   final Future<void> Function(TaskOperation operation) onOperation;
 
-  const TaskTile({super.key, required this.task, required this.onOperation});
+  /// 操作执行中，禁用所有按钮防止并发请求。
+  final bool disabled;
+
+  const TaskTile({
+    super.key,
+    required this.task,
+    required this.onOperation,
+    this.disabled = false,
+  });
 
   static const _labels = {
     TaskOperation.start: '启动',
@@ -39,8 +47,10 @@ class TaskTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(task.taskName,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    task.taskName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 4),
                   Text('状态：${task.status.apiValue}'),
                   if (task.status == TaskStatus.running)
@@ -52,7 +62,7 @@ class TaskTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 4),
                 child: TextButton(
-                  onPressed: () => onOperation(op),
+                  onPressed: disabled ? null : () => onOperation(op),
                   child: Text(_labels[op]!),
                 ),
               ),
