@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/app.dart';
 import 'package:ffbox_edgelink/core/config/app_config.dart';
+import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/data/repositories/session_repository_impl.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
@@ -9,6 +10,11 @@ import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化文件日志系统
+  await fileLogger.init();
+  await fileLogger.cleanOldLogs();
+
   logDebug('main: 应用启动');
   Session? session;
   try {

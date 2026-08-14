@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
+import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 
 class ApiClient {
@@ -7,24 +8,28 @@ class ApiClient {
   final String Function() _tokenProvider;
   final int _maxRetries;
 
-  ApiClient({Dio? dio, String Function()? tokenProvider, int maxRetries = 2})
-      : _dio = dio ??
-            Dio(BaseOptions(
+  ApiClient({Dio? dio, String Function()? tokenProvider, this._maxRetries = 2})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 30),
               sendTimeout: const Duration(seconds: 10),
-            )),
-        _tokenProvider = tokenProvider ?? (() => ''),
-        _maxRetries = maxRetries {
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        final token = _tokenProvider();
-        if (token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-        handler.next(options);
-      },
-    ));
+            ),
+          ),
+      _tokenProvider = tokenProvider ?? (() => '') {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final token = _tokenProvider();
+          if (token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          handler.next(options);
+        },
+      ),
+    );
   }
 
   Future<T> request<T>({
@@ -44,7 +49,19 @@ class ApiClient {
           data: data,
           options: Options(method: method),
         );
-        logDebug('$method $path -> ${response.statusCode}');
+        logDebug(
+          '$method $path -> ${response.statusCode} (${response.data.runtimeType})',
+        );
+
+        // 将原始响应数据写入文件日志（不输出到控制台，避免敏感信息泄露）
+        await fileLogger.logRawData(
+          endpoint: path,
+          method: method,
+          responseData: response.data,
+          statusCode: response.statusCode,
+          headers: response.headers.map,
+        );
+
         return response.data as T;
       } on DioException catch (e) {
         final kind = _mapKind(e);

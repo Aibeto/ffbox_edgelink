@@ -63,17 +63,36 @@ class TaskService {
 
   TaskService(this._repository);
 
-  /// 拉取全部任务：先取 ID 列表，再逐条取详情。
+  /// 分页加载每页的任务数量。
+  static const int _pageSize = 100;
+
+  /// 拉取全部任务：分页获取 ID 列表，再逐条取详情。
   Future<TaskLoadResult> loadTasks() async {
     final sw = Stopwatch()..start();
-    final ids = await _repository.listTaskIds();
+
+    // 分页获取所有任务 ID
+    final allIds = <int>[];
+    var offset = 0;
+    while (true) {
+      final ids = await _repository.listTaskIds(
+        offset: offset,
+        size: _pageSize,
+      );
+      allIds.addAll(ids);
+      logDebug(
+        'loadTasks: offset=$offset, 本页${ids.length}项, 累计${allIds.length}项',
+      );
+      if (ids.length < _pageSize) break;
+      offset += _pageSize;
+    }
+
     sw.stop();
     final latencyMs = sw.elapsedMilliseconds;
-    logDebug('loadTasks: listTaskIds ${ids.length} 项, latency=${latencyMs}ms');
+    logDebug('loadTasks: 共${allIds.length}项, latency=${latencyMs}ms');
 
     final tasks = <Task>[];
     var failed = 0;
-    for (final id in ids) {
+    for (final id in allIds) {
       try {
         tasks.add(await _repository.getTask(id));
       } catch (e) {
@@ -89,44 +108,55 @@ class TaskService {
     );
   }
 
+  /// 分页获取所有任务 ID（用于操作确认等场景）。
+  Future<List<int>> _fetchAllIds() async {
+    final allIds = <int>[];
+    var offset = 0;
+    while (true) {
+      final ids = await _repository.listTaskIds(
+        offset: offset,
+        size: _pageSize,
+      );
+      allIds.addAll(ids);
+      if (ids.length < _pageSize) break;
+      offset += _pageSize;
+    }
+    return allIds;
+  }
+
   /// 判断某状态是否可执行某操作。
   bool canExecute(TaskStatus status, TaskOperation operation) =>
       TaskStateMachine.canExecute(status, operation);
 
   Future<void> start(int id) {
     logDebug('task.start id=$id');
-    return _repository.startTask(id);
+    return _repository.startTasks([id]);
   }
 
   Future<void> pause(int id) {
     logDebug('task.pause id=$id');
-    return _repository.pauseTask(id);
+    return _repository.pauseTasks([id]);
   }
 
   Future<void> resume(int id) {
     logDebug('task.resume id=$id');
-    return _repository.resumeTask(id);
+    return _repository.resumeTasks([id]);
   }
 
   Future<void> delete(int id) {
     logDebug('task.delete id=$id');
-    return _repository.deleteTask(id);
+    return _repository.deleteTasks([id]);
   }
 
   Future<void> ready(int id) {
     logDebug('task.ready id=$id');
-    return _repository.readyTask(id);
+    return _repository.readyTasks([id]);
   }
 
   Future<void> reset(int id) {
     logDebug('task.reset id=$id');
-    return _repository.resetTask(id);
+    return _repository.resetTasks([id]);
   }
-
-  Future<int> create({
-    required String taskName,
-    Map<String, dynamic>? outputParams,
-  }) => _repository.createTask(taskName: taskName, outputParams: outputParams);
 
   /// 执行任务操作并给出三态结果。
   ///
@@ -147,14 +177,12 @@ class TaskService {
           unauthorized: true,
         );
       }
-      // 确定性失败：服务器明确拒绝（400/403/500...）
       if (e.statusCode != null) {
         logDebug(
           'executeOperation id=$id op=$op -> rejected (${e.statusCode}) ${e.friendlyMessage}',
         );
         return TaskOperationOutcome.failed(e.friendlyMessage);
       }
-      // 不确定性失败：超时/连接错误 → 查询确认
       logDebug(
         'executeOperation id=$id op=$op -> uncertain (timeout/connection), confirming...',
       );
@@ -166,19 +194,18 @@ class TaskService {
       return _confirmOperation(id, op);
     }
 
-    // POST 返回 200：服务器总是返回 success，仍需查询确认实际状态
     logDebug('executeOperation id=$id op=$op -> 200 OK, confirming...');
     onStatus?.call('正在确认任务状态...');
     return _confirmOperation(id, op);
   }
 
   Future<void> _execute(TaskOperation op, int id) => switch (op) {
-    TaskOperation.start => _repository.startTask(id),
-    TaskOperation.pause => _repository.pauseTask(id),
-    TaskOperation.resume => _repository.resumeTask(id),
-    TaskOperation.delete => _repository.deleteTask(id),
-    TaskOperation.ready => _repository.readyTask(id),
-    TaskOperation.reset => _repository.resetTask(id),
+    TaskOperation.start => _repository.startTasks([id]),
+    TaskOperation.pause => _repository.pauseTasks([id]),
+    TaskOperation.resume => _repository.resumeTasks([id]),
+    TaskOperation.delete => _repository.deleteTasks([id]),
+    TaskOperation.ready => _repository.readyTasks([id]),
+    TaskOperation.reset => _repository.resetTasks([id]),
     _ => Future.value(),
   };
 
@@ -199,7 +226,7 @@ class TaskService {
     TaskOperation.ready =>
       status == TaskStatus.idleQueued || status == TaskStatus.pausedQueued,
     TaskOperation.reset => status == TaskStatus.idle,
-    TaskOperation.delete => false, // delete 单独处理
+    TaskOperation.delete => false,
     _ => true,
   };
 
@@ -207,10 +234,9 @@ class TaskService {
     int id,
     TaskOperation op,
   ) async {
-    // 删除：通过「任务是否还在列表中」确认
     if (op == TaskOperation.delete) {
       try {
-        final ids = await _repository.listTaskIds();
+        final ids = await _fetchAllIds();
         if (!ids.contains(id)) {
           logDebug('confirm delete id=$id -> success (removed)');
           return TaskOperationOutcome.success('删除已生效');
@@ -223,7 +249,6 @@ class TaskService {
       }
     }
 
-    // 其他操作：重新拉取任务，比对状态
     try {
       final task = await _repository.getTask(id);
       if (_tookEffect(op, task.status)) {

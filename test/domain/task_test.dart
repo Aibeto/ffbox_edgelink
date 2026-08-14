@@ -8,9 +8,9 @@ void main() {
       final task = Task.fromJson({
         'taskName': 'demo.mp4',
         'status': 'running',
-        'progressLog': {'elapsed': 12.5, 'lastStarted': 1.0, 'lastPaused': 0.0},
-        'errorInfo': [],
-        'outputFiles': [],
+        'runs': [
+          {'elapsed': 12.5, 'errorInfo': [], 'outputFiles': []},
+        ],
       });
 
       expect(task.taskName, 'demo.mp4');

@@ -8,33 +8,22 @@ class TaskRepositoryImpl implements TaskRepository {
   TaskRepositoryImpl(this._api);
 
   @override
-  Future<List<int>> listTaskIds() => _api.listTaskIds();
+  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) =>
+      _api.listTaskIds(offset: offset, size: size);
 
   @override
-  Future<Task> getTask(int id) async {
-    final task = await _api.getTask(id);
-    return task.copyWith(id: id);
-  }
+  Future<Task> getTask(int id) => _api.getTask(id);
 
   @override
-  Future<int> createTask({required String taskName, Map<String, dynamic>? outputParams}) =>
-      _api.createTask(taskName, outputParams);
-
+  Future<void> deleteTasks(List<int> ids) => _api.deleteTasks(ids);
   @override
-  Future<void> deleteTask(int id) => _api.deleteTask(id);
-
+  Future<void> startTasks(List<int> ids) => _api.startTasks(ids);
   @override
-  Future<void> startTask(int id) => _api.startTask(id);
-
+  Future<void> readyTasks(List<int> ids) => _api.readyTasks(ids);
   @override
-  Future<void> readyTask(int id) => _api.readyTask(id);
-
+  Future<void> pauseTasks(List<int> ids) => _api.pauseTasks(ids);
   @override
-  Future<void> pauseTask(int id) => _api.pauseTask(id);
-
+  Future<void> resumeTasks(List<int> ids) => _api.resumeTasks(ids);
   @override
-  Future<void> resumeTask(int id) => _api.resumeTask(id);
-
-  @override
-  Future<void> resetTask(int id) => _api.resetTask(id);
+  Future<void> resetTasks(List<int> ids) => _api.resetTasks(ids);
 }

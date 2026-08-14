@@ -8,9 +8,8 @@ class AuthRepositoryImpl implements AuthRepository {
   final FFBoxApi _api;
   final AppConfig _config;
 
-  AuthRepositoryImpl({required FFBoxApi api, required AppConfig config})
-      : _api = api,
-        _config = config;
+  AuthRepositoryImpl({required this._api, required AppConfig config})
+      : _config = config;
 
   @override
   Future<LoginResult> login({

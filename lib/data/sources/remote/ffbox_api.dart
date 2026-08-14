@@ -1,5 +1,6 @@
 import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/core/network/api_client.dart';
+import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/domain/entities/login_result.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 
@@ -21,13 +22,34 @@ class FFBoxApi {
     return LoginResult.fromJson(json);
   }
 
-  Future<List<int>> listTaskIds() async {
-    final data = await _client.request<List<dynamic>>(
+  /// 获取任务 ID 列表（分页）。
+  /// [offset] 起始条目（从 0 开始），[size] 每页返回数量。
+  Future<List<int>> listTaskIds({int offset = 0, int size = 100}) async {
+    final data = await _client.request<Map<String, dynamic>>(
       method: 'GET',
       path: _url('/api/v1/tasks'),
+      query: {'offset': offset, 'size': size, 'idOnly': true},
       retryOnFailure: true,
     );
-    return data.map((e) => (e as num).toInt()).toList();
+    logDebug(
+      'listTaskIds: offset=$offset, size=$size, totalCount=${data['totalCount']}',
+    );
+    // 格式 1: {taskIds: [1, 2, 3], totalCount: N}
+    final taskIds = data['taskIds'];
+    if (taskIds is List) {
+      return taskIds.map((e) => (e as num).toInt()).toList();
+    }
+    // 格式 2: {tasks: [{id:1,...}, {id:2,...}], totalCount: N}
+    final tasks = data['tasks'];
+    if (tasks is List) {
+      return tasks
+          .whereType<Map>()
+          .map((t) => (t['id'] as num?)?.toInt())
+          .whereType<int>()
+          .toList();
+    }
+    logDebug('listTaskIds: 无法解析 taskIds, keys=${data.keys.toList()}');
+    return [];
   }
 
   Future<Task> getTask(int id) async {
@@ -39,29 +61,36 @@ class FFBoxApi {
     return Task.fromJson(json);
   }
 
-  Future<int> createTask(String taskName, Map<String, dynamic>? outputParams) async {
-    final json = await _client.request<Map<String, dynamic>>(
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  ) async {
+    final json = await _client.request<List<dynamic>>(
       method: 'POST',
       path: _url('/api/v1/tasks'),
-      data: {'taskName': taskName, if (outputParams != null) 'outputParams': outputParams},
+      data: {'filePaths': filePaths, 'outputParams': outputParams},
     );
-    return (json['taskId'] as num).toInt();
+    return json.map((e) => (e as num).toInt()).toList();
   }
 
-  Future<void> _request(String method, String path) async {
-    await _client.request<dynamic>(method: method, path: _url(path));
+  Future<void> _batchRequest(String path, List<int> ids) async {
+    await _client.request<dynamic>(
+      method: 'POST',
+      path: _url(path),
+      data: {'ids': ids},
+    );
   }
 
-  Future<void> deleteTask(int id) =>
-      _request('DELETE', '/api/v1/tasks/$id');
-  Future<void> startTask(int id) =>
-      _request('POST', '/api/v1/tasks/$id/start');
-  Future<void> readyTask(int id) =>
-      _request('POST', '/api/v1/tasks/$id/ready');
-  Future<void> pauseTask(int id) =>
-      _request('POST', '/api/v1/tasks/$id/pause');
-  Future<void> resumeTask(int id) =>
-      _request('POST', '/api/v1/tasks/$id/resume');
-  Future<void> resetTask(int id) =>
-      _request('POST', '/api/v1/tasks/$id/reset');
+  Future<void> deleteTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/delete', ids);
+  Future<void> startTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/start', ids);
+  Future<void> readyTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/ready', ids);
+  Future<void> pauseTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/pause', ids);
+  Future<void> resumeTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/resume', ids);
+  Future<void> resetTasks(List<int> ids) =>
+      _batchRequest('/api/v1/tasks/reset', ids);
 }
