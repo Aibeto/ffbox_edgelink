@@ -39,6 +39,8 @@ dependencies:
   crypto: ^3.0.7
   shared_preferences: ^2.5.5
   path_provider: ^2.1.0
+  archive: ^4.0.9
+  file_saver: ^0.4.0
 
 dev_dependencies:
   flutter_test:

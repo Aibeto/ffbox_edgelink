@@ -7,7 +7,6 @@ import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
-import 'package:ffbox_edgelink/presentation/screens/login_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
@@ -89,11 +88,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   Future<void> _logout() async {
     logDebug('taskListUI: 用户登出');
     await ref.read(sessionRepositoryProvider).clear();
+    // 清空会话后由 FFBoxApp 根路由自动切回登录页。不要手动 push 登录页，
+    // 否则会替换掉根路由，导致重新登录后仍停留在登录页无法刷新。
     ref.read(sessionProvider.notifier).update(null);
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   void _openDetail(Task task) {

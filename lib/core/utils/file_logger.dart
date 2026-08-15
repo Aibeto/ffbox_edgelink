@@ -27,6 +27,9 @@ class FileLogger {
     return _instance!;
   }
 
+  /// 实际使用的日志目录（初始化后可用，未初始化时为 null）。
+  Directory? get logDir => _logDir;
+
   FileLogger._();
 
   /// 将 [DateTime] 格式化为紧凑 ISO 8601 字符串（无分隔符）。

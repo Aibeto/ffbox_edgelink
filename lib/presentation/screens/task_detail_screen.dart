@@ -9,7 +9,6 @@ import 'package:ffbox_edgelink/domain/entities/task_status.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
-import 'package:ffbox_edgelink/presentation/screens/login_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/marquee_text.dart';
 import 'package:ffbox_edgelink/presentation/widgets/status_badge.dart';
@@ -95,12 +94,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Future<void> _logout() async {
     logDebug('taskDetailUI: 用户登出');
     await ref.read(sessionRepositoryProvider).clear();
+    // 清空会话后由 FFBoxApp 根路由自动切回登录页；详情页是 push 出来的，
+    // 只需弹回根路由，不要手动 push 登录页替换根路由。
     ref.read(sessionProvider.notifier).update(null);
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _onOperation(TaskOperation op) async {

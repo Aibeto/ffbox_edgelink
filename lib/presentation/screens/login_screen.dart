@@ -8,6 +8,7 @@ import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
+import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -78,10 +79,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    if (_needsPassword && (username.isEmpty || password.isEmpty)) {
-      setState(() => _error = '请输入用户名和密码');
-      return;
-    }
+    // if (_needsPassword && (username.isEmpty || password.isEmpty)) {
+    //   setState(() => _error = '请输入用户名和密码');
+    //   return;
+    // }
 
     logDebug('loginUI: 提交登录 baseUrl=$baseUrl username=$username');
     setState(() {
@@ -154,141 +155,195 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: _AkCard(
                   signalColor: AkColors.info,
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // --- Title ---
-                        Text(
-                          'FFBox',
-                          style: AkTheme.sans(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w800,
-                            color: AkColors.textPrimary,
-                            letterSpacing: 2.0,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'EdgeLink',
-                          style: AkTheme.sans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            color: AkColors.textSecondary,
-                            letterSpacing: 4.0,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // --- Server address ---
-                        Text(
-                          'SERVER',
-                          style: AkTheme.sans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AkColors.textSecondary,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _baseUrlController,
-                          focusNode: _baseUrlFocus,
-                          style: AkTheme.mono(
-                            fontSize: 14,
-                            color: AkColors.textPrimary,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'http(s)://server-address:port',
-                          ),
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) {
-                            if (_needsPassword) {
-                              FocusScope.of(context).nextFocus();
-                            }
-                          },
-                        ),
-
-                        // --- Localhost indicator ---
-                        if (_isLocalhost) ...[
-                          const SizedBox(height: 12),
-                          const _LocalConnectionBanner(),
-                        ],
-
-                        // --- Username & Password (only for non-localhost) ---
-                        if (_needsPassword) ...[
-                          const SizedBox(height: 20),
-                          Text(
-                            'CREDENTIALS',
-                            style: AkTheme.sans(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AkColors.textSecondary,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: _usernameController,
-                            style: AkTheme.sans(color: AkColors.textPrimary),
-                            decoration: const InputDecoration(hintText: '用户名'),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            style: AkTheme.sans(color: AkColors.textPrimary),
-                            decoration: const InputDecoration(hintText: '密码'),
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _submit(),
-                          ),
-                        ],
-
-                        // --- Error message ---
-                        if (_error != null) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AkColors.danger.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(
-                                AkTheme.cutSm,
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // --- Title ---
+                            Text(
+                              'FFBox',
+                              style: AkTheme.sans(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w800,
+                                color: AkColors.textPrimary,
+                                letterSpacing: 2.0,
+                                height: 1.0,
                               ),
-                              border: Border(
-                                left: BorderSide(
-                                  color: AkColors.danger,
-                                  width: AkTheme.signalBorder,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'EdgeLink',
+                              style: AkTheme.sans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                                color: AkColors.textSecondary,
+                                letterSpacing: 4.0,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // --- Server address ---
+                            Text(
+                              'SERVER',
+                              style: AkTheme.sans(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AkColors.textSecondary,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _baseUrlController,
+                              focusNode: _baseUrlFocus,
+                              style: AkTheme.mono(
+                                fontSize: 14,
+                                color: AkColors.textPrimary,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'http(s)://server-address:port',
+                              ),
+                              textInputAction: TextInputAction.next,
+                              onSubmitted: (_) {
+                                if (_needsPassword) {
+                                  FocusScope.of(context).nextFocus();
+                                }
+                              },
+                            ),
+
+                            // --- Localhost indicator ---
+                            if (_isLocalhost) ...[
+                              const SizedBox(height: 12),
+                              const _LocalConnectionBanner(),
+                            ],
+
+                            // --- Username & Password (only for non-localhost) ---
+                            if (_needsPassword) ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                'CREDENTIALS',
+                                style: AkTheme.sans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AkColors.textSecondary,
+                                  letterSpacing: 1.5,
                                 ),
                               ),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: _usernameController,
+                                style: AkTheme.sans(
+                                  color: AkColors.textPrimary,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText: '用户名（选填）',
+                                ),
+                                textInputAction: TextInputAction.next,
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _passwordController,
+                                obscureText: true,
+                                style: AkTheme.sans(
+                                  color: AkColors.textPrimary,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText: '密码（选填）',
+                                ),
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) => _submit(),
+                              ),
+                            ],
+
+                            // --- Error message ---
+                            if (_error != null) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AkColors.danger.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(
+                                    AkTheme.cutSm,
+                                  ),
+                                  border: Border(
+                                    left: BorderSide(
+                                      color: AkColors.danger,
+                                      width: AkTheme.signalBorder,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  _error!,
+                                  style: AkTheme.sans(
+                                    fontSize: 13,
+                                    color: AkColors.danger,
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            // --- Submit button ---
+                            const SizedBox(height: 24),
+                            _AkButton(
+                              label: _loading ? null : '登录',
+                              backgroundColor: AkColors.info,
+                              foregroundColor: AkColors.textInverse,
+                              loading: _loading,
+                              onPressed: _loading ? null : _submit,
                             ),
-                            child: Text(
-                              _error!,
-                              style: AkTheme.sans(
-                                fontSize: 13,
-                                color: AkColors.danger,
+                          ],
+                        ),
+                      ),
+                      // --- 导出日志按钮（右上角） ---
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Tooltip(
+                          message: '导出日志',
+                          child: InkWell(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const ExportLogsScreen(),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.save_alt,
+                                    size: 16,
+                                    color: AkColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'DEBUG LOGOS',
+                                    style: AkTheme.sans(
+                                      fontSize: 12,
+                                      color: AkColors.textSecondary,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
-
-                        // --- Submit button ---
-                        const SizedBox(height: 24),
-                        _AkButton(
-                          label: _loading ? null : '登录',
-                          backgroundColor: AkColors.info,
-                          foregroundColor: AkColors.textInverse,
-                          loading: _loading,
-                          onPressed: _loading ? null : _submit,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
