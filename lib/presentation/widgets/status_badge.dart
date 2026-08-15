@@ -17,6 +17,8 @@ class StatusBadge extends StatefulWidget {
 
 class _StatusBadgeState extends State<StatusBadge>
     with TickerProviderStateMixin {
+  // --- 状态与动画 ---
+
   AnimationController? _pulseController;
 
   bool get _isPulsing =>
@@ -42,6 +44,8 @@ class _StatusBadgeState extends State<StatusBadge>
     }
   }
 
+  // --- 脉冲动画控制 ---
+
   void _startPulse() {
     _pulseController = AnimationController(
       vsync: this,
@@ -54,6 +58,8 @@ class _StatusBadgeState extends State<StatusBadge>
     _pulseController?.dispose();
     super.dispose();
   }
+
+  // --- 构建 UI ---
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +106,8 @@ class _StatusBadgeState extends State<StatusBadge>
     );
   }
 
+  // --- 状态映射 ---
+
   /// 状态对应的信号色（供卡片边条等复用）。
   static Color colorFor(TaskStatus s) {
     return switch (s) {
@@ -112,12 +120,14 @@ class _StatusBadgeState extends State<StatusBadge>
     };
   }
 
+  // --- 中文标签 ---
+
   /// 状态对应的中文标签。
   static String labelFor(TaskStatus s) {
     return switch (s) {
       TaskStatus.deleted => '删除',
       TaskStatus.initializing => '初始化',
-      TaskStatus.idle => '空闲',
+      TaskStatus.idle => '等待',
       TaskStatus.idleQueued => '排队',
       TaskStatus.running => '运行',
       TaskStatus.paused => '暂停',

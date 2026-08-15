@@ -4,6 +4,10 @@ import 'package:ffbox_edgelink/data/sources/remote/ffbox_api.dart';
 import 'package:ffbox_edgelink/domain/entities/login_result.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
 
+/// AuthRepository 的具体实现。
+///
+/// 将密码 SHA256 哈希后委托给 [FFBoxApi] 执行登录请求，
+/// 同时同步更新 [AppConfig] 的服务器地址。
 class AuthRepositoryImpl implements AuthRepository {
   final FFBoxApi _api;
   final AppConfig _config;

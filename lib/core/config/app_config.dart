@@ -4,6 +4,8 @@ class AppConfig {
 
   AppConfig({this.baseUrl = ''});
 
+  // --- 地址规范化 ---
+
   /// 规范化地址，确保无尾部斜杠。
   String get normalizedBaseUrl {
     var url = baseUrl.trim();
@@ -12,6 +14,8 @@ class AppConfig {
     }
     return url;
   }
+
+  // --- 本机检测 ---
 
   /// 判断当前地址是否为本机（允许免密登录）。
   bool get isLocalhost {

@@ -9,8 +9,13 @@ import 'package:ffbox_edgelink/data/repositories/session_repository_impl.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 
+/// 应用入口：初始化、会话恢复、启动 ProviderScope。
 Future<void> main() async {
+  // --- 初始化 ---
+
   WidgetsFlutterBinding.ensureInitialized();
+
+  // --- 系统 UI 配置 ---
 
   // Android 状态栏/导航栏：透明背景 + 浅色图标，由 Scaffold 背景色填充状态栏区域
   SystemChrome.setSystemUIOverlayStyle(
@@ -23,9 +28,12 @@ Future<void> main() async {
     ),
   );
 
-  // 初始化文件日志系统
+  // --- 文件日志初始化 ---
+
   await fileLogger.init();
   await fileLogger.cleanOldLogs();
+
+  // --- 会话恢复 ---
 
   logDebug('main: 应用启动');
   Session? session;
@@ -40,6 +48,8 @@ Future<void> main() async {
     // 会话读取失败不阻塞启动，按未登录处理
     logDebug('main: 加载会话失败: $e');
   }
+
+  // --- 启动应用 ---
 
   runApp(
     ProviderScope(

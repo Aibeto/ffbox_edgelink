@@ -9,9 +9,13 @@ class FFBoxApi {
   final ApiClient _client;
   final AppConfig _config;
 
+  // --- 构造 ---
+
   FFBoxApi(this._client, this._config);
 
   String _url(String path) => '${_config.normalizedBaseUrl}$path';
+
+  // --- 认证 ---
 
   Future<LoginResult> login(String username, String passkeySha256) async {
     final json = await _client.request<Map<String, dynamic>>(
@@ -21,6 +25,8 @@ class FFBoxApi {
     );
     return LoginResult.fromJson(json);
   }
+
+  // --- 任务查询 ---
 
   /// 获取任务 ID 列表（分页）。
   /// [offset] 起始条目（从 0 开始），[size] 每页返回数量。
@@ -59,6 +65,8 @@ class FFBoxApi {
     return [];
   }
 
+  // --- 任务详情 ---
+
   Future<Task> getTask(int id, {bool silent = false}) async {
     final json = await _client.request<Map<String, dynamic>>(
       method: 'GET',
@@ -68,6 +76,8 @@ class FFBoxApi {
     );
     return Task.fromJson(json);
   }
+
+  // --- 任务创建 ---
 
   Future<List<int>> createTasks(
     List<String> filePaths,
@@ -80,6 +90,8 @@ class FFBoxApi {
     );
     return json.map((e) => (e as num).toInt()).toList();
   }
+
+  // --- 批量操作 ---
 
   Future<void> _batchRequest(String path, List<int> ids) async {
     await _client.request<dynamic>(

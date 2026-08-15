@@ -3,10 +3,13 @@ import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 
+/// HTTP 客户端封装（基于 Dio）：超时、Bearer 令牌注入、幂等 GET 有限重试、响应日志记录。
 class ApiClient {
   final Dio _dio;
   final String Function() _tokenProvider;
   final int _maxRetries;
+
+  // --- 构造与拦截器 ---
 
   ApiClient({Dio? dio, String Function()? tokenProvider, this._maxRetries = 2})
     : _dio =
@@ -31,6 +34,8 @@ class ApiClient {
       ),
     );
   }
+
+  // --- 请求方法 ---
 
   Future<T> request<T>({
     required String method,
@@ -84,6 +89,8 @@ class ApiClient {
     }
   }
 
+  // --- 错误分类 ---
+
   ApiErrorKind _mapKind(DioException e) {
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
@@ -100,6 +107,8 @@ class ApiClient {
         return ApiErrorKind.unknown;
     }
   }
+
+  // --- 重试策略 ---
 
   bool _isRetryable(ApiErrorKind kind) =>
       kind == ApiErrorKind.timeout || kind == ApiErrorKind.connectionFailed;

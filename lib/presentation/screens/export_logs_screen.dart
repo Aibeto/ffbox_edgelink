@@ -7,6 +7,7 @@ import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 
+/// 日志导出页：扫描→压缩→保存 zip 文件，支持进度显示与错误处理。
 class ExportLogsScreen extends StatefulWidget {
   const ExportLogsScreen({super.key});
 
@@ -15,6 +16,8 @@ class ExportLogsScreen extends StatefulWidget {
 }
 
 class _ExportLogsScreenState extends State<ExportLogsScreen> {
+  // --- 状态 ---
+
   final _service = LogExportService();
   String _statusText = '正在扫描日志…';
   double _compressProgress = 0;
@@ -22,11 +25,15 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
   bool _done = false;
   String? _error;
 
+  // --- 初始化 ---
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _confirmAndExport());
   }
+
+  // --- 导出流程 ---
 
   Future<void> _confirmAndExport() async {
     final confirmed = await showDialog<bool>(
@@ -146,6 +153,8 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
       _finish('导出失败：$e', isError: true);
     }
   }
+
+  // --- 完成处理 ---
 
   void _finish(String message, {bool isError = false}) {
     if (!mounted) return;

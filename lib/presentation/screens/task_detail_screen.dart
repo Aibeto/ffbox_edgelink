@@ -25,6 +25,8 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
+  // --- 状态 ---
+
   Task? _task;
   int _latencyMs = 0;
   String? _error;
@@ -34,6 +36,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   String? _statusMessage;
 
   static const _pollInterval = Duration(seconds: 1);
+
+  // --- 初始化与销毁 ---
 
   @override
   void initState() {
@@ -50,6 +54,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     logDebug('taskDetailUI: dispose id=${widget.taskId}');
     super.dispose();
   }
+
+  // --- 数据刷新 ---
 
   Future<void> _refresh() async {
     if (_refreshing) return;
@@ -91,6 +97,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
+  // --- 登出 ---
+
   Future<void> _logout() async {
     logDebug('taskDetailUI: 用户登出');
     await ref.read(sessionRepositoryProvider).clear();
@@ -100,6 +108,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
+
+  // --- 任务操作 ---
 
   Future<void> _onOperation(TaskOperation op) async {
     if (_busyOps.contains(op) || _task == null) return;
@@ -143,6 +153,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     return AkColors.danger;
   }
 
+  // --- 格式化工具 ---
+
   String _formatDateTime(num? timestampMs) {
     if (timestampMs == null || timestampMs <= 0) return '--';
     final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs.toInt());
@@ -157,6 +169,28 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
     if (bytes >= 1 << 10) return '${(bytes / (1 << 10)).toStringAsFixed(0)} KB';
     return '$bytes B';
+  }
+
+  /// 判断输入封装是否为图片格式（基于 FFmpeg demuxer 名称）。
+  bool _isImageDemuxer(String demuxer) {
+    const imageDemuxers = {
+      'image2',
+      'image2pipe',
+      'mjpeg',
+      'mjpeg_pipe',
+      'png',
+      'png_pipe',
+      'bmp',
+      'bmp_pipe',
+      'tiff',
+      'tiff_pipe',
+      'webp',
+      'webp_pipe',
+      'gif',
+      'apng',
+      'rawvideo',
+    };
+    return imageDemuxers.contains(demuxer);
   }
 
   String _formatBitrate(num? bps) {
@@ -493,7 +527,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               mono: true,
             ),
           const Divider(color: AkColors.border, height: 18),
-          for (final stream in input.streams) _StreamRow(stream: stream),
+          for (final stream in input.streams)
+            _StreamRow(stream: stream, isImage: _isImageDemuxer(input.demuxer)),
         ],
       ),
     );
@@ -509,6 +544,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       return const SizedBox.shrink();
     }
     final hasCmd = run.paraArray.isNotEmpty;
+    final isImage =
+        task.inputs.isNotEmpty && _isImageDemuxer(task.inputs.first.demuxer);
 
     return _SectionCard(
       title: '转码输出配置',
@@ -519,7 +556,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             _KeyValueRow(label: '解码硬件加速', value: run.hwaccel, mono: true),
           _KeyValueRow(label: '状态', value: run.status),
           if (run.vcodec.isNotEmpty)
-            _KeyValueRow(label: '视频编码', value: run.vcodec, mono: true),
+            _KeyValueRow(
+              label: isImage ? '图片编码' : '视频编码',
+              value: run.vcodec,
+              mono: true,
+            ),
           if (run.acodec.isNotEmpty)
             _KeyValueRow(label: '音频编码', value: run.acodec, mono: true),
           if (run.muxFormat.isNotEmpty)
@@ -848,8 +889,9 @@ class _KeyValueRow extends StatelessWidget {
 
 class _StreamRow extends StatelessWidget {
   final TaskStreamInfo stream;
+  final bool isImage;
 
-  const _StreamRow({required this.stream});
+  const _StreamRow({required this.stream, this.isImage = false});
 
   @override
   Widget build(BuildContext context) {
@@ -889,7 +931,7 @@ class _StreamRow extends StatelessWidget {
               border: Border.all(color: color.withValues(alpha: 0.4)),
             ),
             child: Text(
-              isVideo ? '视频' : '音频',
+              isVideo ? (isImage ? '图片' : '视频') : '音频',
               style: AkTheme.sans(
                 fontSize: 10,
                 color: color,

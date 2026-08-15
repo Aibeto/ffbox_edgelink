@@ -11,6 +11,7 @@ import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
 
+/// 任务列表页：1s 轮询刷新、任务操作（启动/暂停/继续/删除）、设备名+延迟显示。
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
 
@@ -19,6 +20,8 @@ class TaskListScreen extends ConsumerStatefulWidget {
 }
 
 class _TaskListScreenState extends ConsumerState<TaskListScreen> {
+  // --- 状态与轮询 ---
+
   AsyncValue<List<Task>> _tasks = const AsyncValue.loading();
   int _failedCount = 0;
   int _latencyMs = 0;
@@ -31,6 +34,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   final Set<int> _busyTaskIds = {};
 
   static const _pollInterval = Duration(seconds: 1);
+
+  // --- 初始化与销毁 ---
 
   @override
   void initState() {
@@ -46,6 +51,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     logDebug('taskListUI: dispose, 停止轮询');
     super.dispose();
   }
+
+  // --- 数据刷新 ---
 
   Future<void> _refresh() async {
     if (_refreshing) return;
@@ -92,6 +99,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     // 否则会替换掉根路由，导致重新登录后仍停留在登录页无法刷新。
     ref.read(sessionProvider.notifier).update(null);
   }
+
+  // --- 任务操作 ---
 
   void _openDetail(Task task) {
     logDebug('taskListUI: 打开详情 id=${task.id}');
@@ -151,6 +160,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     await _refresh();
   }
 
+  // --- 辅助方法 ---
+
   String _verb(TaskOperation op) => switch (op) {
     TaskOperation.start => '启动',
     TaskOperation.pause => '暂停',
@@ -158,6 +169,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     TaskOperation.delete => '删除',
     _ => '操作',
   };
+
+  // --- 构建 UI ---
 
   @override
   Widget build(BuildContext context) {

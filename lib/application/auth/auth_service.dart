@@ -2,6 +2,8 @@ import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 
+// --- 登录结果定义 ---
+
 /// 登录结果。
 class AuthOutcome {
   final Session? session;
@@ -11,11 +13,15 @@ class AuthOutcome {
   const AuthOutcome.failure(String this.error) : session = null;
 }
 
+// --- 登录业务逻辑 ---
+
 /// 登录业务逻辑（纯 Dart，不依赖 UI 框架）。
 class AuthService {
   final AuthRepository _authRepository;
 
   AuthService(this._authRepository);
+
+  // --- 登录执行 ---
 
   Future<AuthOutcome> login({
     required String baseUrl,

@@ -10,6 +10,7 @@ import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
 
+/// 登录页：服务器地址输入、本机免密检测、用户名密码表单。登录成功保存会话并切换到任务列表。
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,6 +19,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  // --- 状态与控制器 ---
+
   final _baseUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -26,6 +29,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   bool _isLocalhost = false;
   Timer? _debounce;
+
+  // --- 初始化与销毁 ---
 
   @override
   void initState() {
@@ -57,6 +62,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  // --- 本机检测 ---
+
   void _checkLocalhost(String url) {
     final isLocal = AppConfig(baseUrl: url).isLocalhost;
     if (isLocal != _isLocalhost) {
@@ -68,6 +75,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final baseUrl = _baseUrlController.text.trim();
     return baseUrl.isNotEmpty && !_isLocalhost;
   }
+
+  // --- 登录提交 ---
 
   Future<void> _submit() async {
     final baseUrl = _baseUrlController.text.trim();
@@ -139,7 +148,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // --- Background subtle grid pattern ---
+          // --- 背景网格 ---
           CustomPaint(
             painter: _GridPainter(
               color: AkColors.border.withValues(alpha: 0.15),
@@ -147,7 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             size: Size.infinite,
           ),
 
-          // --- Centered login card ---
+          // --- 登录卡片 ---
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -163,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // --- Title ---
+                            // --- 标题 ---
                             Text(
                               'FFBox',
                               style: AkTheme.sans(
@@ -186,7 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: 32),
 
-                            // --- Server address ---
+                            // --- 服务器地址 ---
                             Text(
                               'SERVER',
                               style: AkTheme.sans(
@@ -215,13 +224,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               },
                             ),
 
-                            // --- Localhost indicator ---
+                            // --- 本机连接提示 ---
                             if (_isLocalhost) ...[
                               const SizedBox(height: 12),
                               const _LocalConnectionBanner(),
                             ],
 
-                            // --- Username & Password (only for non-localhost) ---
+                            // --- 凭据输入（非本机时显示） ---
                             if (_needsPassword) ...[
                               const SizedBox(height: 20),
                               Text(
@@ -291,7 +300,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ],
 
-                            // --- Submit button ---
+                            // --- 提交按钮 ---
                             const SizedBox(height: 24),
                             _AkButton(
                               label: _loading ? null : '登录',
@@ -319,7 +328,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             },
                             borderRadius: BorderRadius.circular(AkTheme.cutSm),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

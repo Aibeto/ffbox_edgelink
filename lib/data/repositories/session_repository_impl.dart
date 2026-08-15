@@ -2,6 +2,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 
+/// SessionRepository 的具体实现。
+///
+/// 使用 SharedPreferences 持久化会话数据（服务器地址+用户名+sessionId），
+/// 登录成功写入，登出清空，启动时恢复以实现免重新登录。
 class SessionRepositoryImpl implements SessionRepository {
   static const _kBaseUrl = 'session_base_url';
   static const _kUsername = 'session_username';

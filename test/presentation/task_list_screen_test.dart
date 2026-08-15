@@ -46,6 +46,6 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('demo'), findsOneWidget);
-    expect(find.text('空闲'), findsOneWidget);
+    expect(find.text('等待'), findsOneWidget);
   });
 }

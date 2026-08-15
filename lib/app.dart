@@ -5,11 +5,14 @@ import 'package:ffbox_edgelink/presentation/screens/login_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_list_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 
+/// 根组件 MaterialApp：路由分发、主题配置。未登录→登录页，已登录→任务列表。
 class FFBoxApp extends ConsumerWidget {
   const FFBoxApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // --- 路由与主题 ---
+
     final session = ref.watch(sessionProvider);
     return MaterialApp(
       title: 'FFBox EdgeLink',

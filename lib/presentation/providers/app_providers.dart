@@ -13,8 +13,12 @@ import 'package:ffbox_edgelink/domain/repositories/server_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
 
+// --- 服务器配置 ---
+
 /// 服务器地址配置（单一事实来源）。
 final appConfigProvider = Provider<AppConfig>((ref) => AppConfig());
+
+// --- 会话管理 ---
 
 /// 当前会话（登录成功写入，登出清空）。
 class SessionNotifier extends Notifier<Session?> {
@@ -40,6 +44,8 @@ final sessionProvider = NotifierProvider<SessionNotifier, Session?>(
   SessionNotifier.new,
 );
 
+// --- 仓储层 ---
+
 /// 会话持久化。
 final sessionRepositoryProvider = Provider<SessionRepository>(
   (ref) => SessionRepositoryImpl(),
@@ -50,12 +56,16 @@ final serverRepositoryProvider = Provider<ServerRepository>(
   (ref) => ServerRepositoryImpl(),
 );
 
+// --- 网络层 ---
+
 /// HTTP 客户端：请求时从会话读取 token。
 final apiClientProvider = Provider<ApiClient>(
   (ref) => ApiClient(
     tokenProvider: () => ref.read(sessionProvider)?.sessionId ?? '',
   ),
 );
+
+// --- 数据源 ---
 
 /// FFBox 远端数据源。
 final ffboxApiProvider = Provider<FFBoxApi>(
@@ -74,6 +84,8 @@ final authRepositoryProvider = Provider<AuthRepository>(
 final taskRepositoryProvider = Provider<TaskRepository>(
   (ref) => TaskRepositoryImpl(ref.watch(ffboxApiProvider)),
 );
+
+// --- 业务服务 ---
 
 /// 认证服务。
 final authServiceProvider = Provider<AuthService>(

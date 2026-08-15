@@ -2,6 +2,8 @@ import 'dart:math' show min;
 
 import 'package:ffbox_edgelink/domain/entities/task_status.dart';
 
+// --- 输入媒体流信息 ---
+
 /// 输入媒体流信息（before[].streams[i]）。
 class TaskStreamInfo {
   /// Video / Audio。
@@ -48,6 +50,8 @@ class TaskStreamInfo {
   }
 }
 
+// --- 输入媒体信息 ---
+
 /// 输入媒体信息（before[i]）。
 class TaskInputInfo {
   final String filePath;
@@ -90,6 +94,8 @@ class TaskInputInfo {
     );
   }
 }
+
+// --- 转码运行信息 ---
 
 /// 转码 run（runs[i]）。
 ///
@@ -157,7 +163,7 @@ class TaskRunInfo {
         .map((e) => e.toString())
         .toList();
 
-    // 输出配置摘要：after.outputs[0]
+    // --- 输出配置解析 ---
     var vcodec = '';
     var acodec = '';
     var muxFormat = '';
@@ -227,6 +233,8 @@ class TaskRunInfo {
     return const [];
   }
 }
+
+// --- 任务实体 ---
 
 class Task {
   final int id;

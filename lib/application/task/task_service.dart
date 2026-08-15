@@ -18,6 +18,8 @@ class TaskLoadResult {
   });
 }
 
+// --- 操作结果 ---
+
 /// 任务操作结果状态。
 enum OperationOutcomeStatus { success, failed, unconfirmed }
 
@@ -57,6 +59,8 @@ class TaskOperationOutcome {
       TaskOperationOutcome._(OperationOutcomeStatus.unconfirmed, message);
 }
 
+// --- 任务业务逻辑 ---
+
 /// 任务业务逻辑（纯 Dart）。UI 通过它执行任务操作并判断可用性。
 class TaskService {
   final TaskRepository _repository;
@@ -65,6 +69,8 @@ class TaskService {
 
   /// 分页加载每页的任务数量。
   static const int _pageSize = 100;
+
+  // --- 任务加载 ---
 
   /// 拉取全部任务：分页获取 ID 列表，再逐条取详情。
   Future<TaskLoadResult> loadTasks({bool silent = false}) async {
@@ -126,6 +132,8 @@ class TaskService {
   bool canExecute(TaskStatus status, TaskOperation operation) =>
       TaskStateMachine.canExecute(status, operation);
 
+  // --- 单任务操作 ---
+
   Future<void> start(int id) {
     logDebug('task.start id=$id');
     return _repository.startTasks([id]);
@@ -155,6 +163,8 @@ class TaskService {
     logDebug('task.reset id=$id');
     return _repository.resetTasks([id]);
   }
+
+  // --- 执行操作（三态确认） ---
 
   /// 执行任务操作并给出三态结果。
   ///
@@ -196,6 +206,8 @@ class TaskService {
     return _confirmOperation(id, op);
   }
 
+  // --- 操作分发 ---
+
   Future<void> _execute(TaskOperation op, int id) => switch (op) {
     TaskOperation.start => _repository.startTasks([id]),
     TaskOperation.pause => _repository.pauseTasks([id]),
@@ -205,6 +217,8 @@ class TaskService {
     TaskOperation.reset => _repository.resetTasks([id]),
     _ => Future.value(),
   };
+
+  // --- 生效判定 ---
 
   bool _tookEffect(TaskOperation op, TaskStatus status) => switch (op) {
     TaskOperation.start => status == TaskStatus.running,
@@ -216,6 +230,8 @@ class TaskService {
     TaskOperation.delete => false,
     _ => true,
   };
+
+  // --- 状态确认 ---
 
   Future<TaskOperationOutcome> _confirmOperation(
     int id,

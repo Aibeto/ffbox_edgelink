@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 /// - 在 release 模式下也可用于记录关键错误
 /// - 在测试环境中，日志会写入内存缓冲区而不是文件
 class FileLogger {
+  // --- 单例与状态 ---
+
   static FileLogger? _instance;
   Directory? _logDir;
   File? _logFile;
@@ -44,6 +46,8 @@ class FileLogger {
     final ms = dt.millisecond.toString().padLeft(3, '0');
     return '$y$m${d}T$h$min$s.$ms';
   }
+
+  // --- 初始化 ---
 
   /// 初始化日志目录和文件。
   ///
@@ -96,6 +100,8 @@ class FileLogger {
     }
   }
 
+  // --- 日志写入 ---
+
   /// 写入普通日志（同时输出到控制台和文件）。
   Future<void> log(String message) async {
     if (kDebugMode) {
@@ -112,6 +118,8 @@ class FileLogger {
     // 写入文件（如果已初始化）
     await _writeToFile(_logFile, logEntry);
   }
+
+  // --- 原始数据记录 ---
 
   /// 写入原始响应数据（仅写入文件，不输出到控制台）。
   ///
@@ -148,6 +156,8 @@ class FileLogger {
     await _writeToFile(_rawDataFile, content);
   }
 
+  // --- 错误日志 ---
+
   /// 写入错误日志（同时输出到控制台和文件）。
   Future<void> logError(
     String message, [
@@ -179,6 +189,8 @@ class FileLogger {
     await _writeToFile(_logFile, content);
   }
 
+  // --- 任务解析日志 ---
+
   /// 写入任务解析日志（仅写入文件，不输出到控制台）。
   Future<void> logTaskParsing({
     required String endpoint,
@@ -203,6 +215,8 @@ class FileLogger {
     await _writeToFile(_rawDataFile, content);
   }
 
+  // --- 文件操作 ---
+
   /// 写入文件（追加模式）。
   Future<void> _writeToFile(File? file, String content) async {
     if (file == null) return;
@@ -221,6 +235,8 @@ class FileLogger {
       print('[FFBox EdgeLink] 写入日志文件失败: $e');
     }
   }
+
+  // --- 路径查询 ---
 
   /// 获取最近的日志文件路径（用于错误报告）。
   Future<String?> getLatestLogPath() async {
@@ -245,6 +261,8 @@ class FileLogger {
     }
     return null;
   }
+
+  // --- 旧日志清理 ---
 
   /// 清理旧日志文件，仅保留最新 [keep] 套（每套 = 同时间戳的 app 日志与原始数据日志）。
   Future<void> cleanOldLogs({int keep = 5}) async {
@@ -280,6 +298,8 @@ class FileLogger {
       // ignore
     }
   }
+
+  // --- 测试辅助 ---
 
   /// 获取内存缓冲区中的日志内容（用于测试）。
   List<String> getLogBuffer() => List.unmodifiable(_logBuffer);

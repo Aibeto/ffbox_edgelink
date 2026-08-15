@@ -5,6 +5,8 @@ import 'package:archive/archive.dart';
 import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:path_provider/path_provider.dart';
 
+// --- 导出阶段定义 ---
+
 /// 日志导出阶段。
 enum LogExportStage { scanning, compressing, saving, done, error }
 
@@ -22,6 +24,8 @@ class LogExportProgress {
     this.zipBytes,
   });
 }
+
+// --- 导出业务逻辑 ---
 
 /// 日志导出业务逻辑（纯 Dart，无框架依赖）。
 class LogExportService {

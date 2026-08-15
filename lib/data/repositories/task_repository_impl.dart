@@ -2,6 +2,10 @@ import 'package:ffbox_edgelink/data/sources/remote/ffbox_api.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
 
+/// TaskRepository 的具体实现。
+///
+/// 纯委托转发层：将接口调用直接转发给 [FFBoxApi]，
+/// 不含额外业务逻辑，便于未来替换数据源或添加拦截。
 class TaskRepositoryImpl implements TaskRepository {
   final FFBoxApi _api;
 
