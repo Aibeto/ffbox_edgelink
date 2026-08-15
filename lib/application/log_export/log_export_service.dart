@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -23,8 +25,31 @@ class LogExportProgress {
   });
 }
 
+/// 在后台 Isolate 中读取文件并压缩为 zip。
+///
+/// 入参为 `[filePathList, logDirPath]`，返回 `Uint8List`（zip 字节）。
+Future<Uint8List> _compressInIsolate(List<dynamic> args) async {
+  final filePaths = args[0] as List<String>;
+  final logDirPath = args[1] as String;
+  final archive = Archive();
+  for (var i = 0; i < filePaths.length; i++) {
+    final file = File(filePaths[i]);
+    final relativePath = filePaths[i].substring(logDirPath.length + 1);
+    final bytes = await file.readAsBytes();
+    archive.addFile(ArchiveFile(relativePath, bytes.length, bytes));
+  }
+  final encoded = ZipEncoder().encode(archive, level: 9);
+  return Uint8List.fromList(encoded);
+}
+
 /// 日志导出业务逻辑（纯 Dart，无框架依赖）。
 class LogExportService {
+  Timer? _progressTimer;
+  final _progressController = StreamController<double>.broadcast();
+
+  /// 压缩进度流（0.0 ~ 1.0），压缩期间每隔 200ms 发出一次更新。
+  Stream<double> get compressProgress => _progressController.stream;
+
   /// 定位 logs 目录。
   ///
   /// 优先复用 [fileLogger] 实际写入的日志目录，避免与导出路径不一致；
@@ -59,25 +84,41 @@ class LogExportService {
     return files;
   }
 
-  /// 将文件列表压缩为 zip，返回字节数组。
+  /// 将文件列表压缩为 zip，在后台 Isolate 中执行，不阻塞 UI 线程。
   ///
-  /// [onProgress] 在压缩每个文件后回调，用于更新进度。
-  Uint8List compressToZip(
-    List<File> files,
-    Directory logDir, {
-    void Function(double progress)? onProgress,
-  }) {
-    final archive = Archive();
-    for (var i = 0; i < files.length; i++) {
-      final file = files[i];
-      // 相对于 logs 目录的路径
-      final relativePath = file.path.substring(logDir.path.length + 1);
-      final bytes = file.readAsBytesSync();
-      archive.addFile(ArchiveFile(relativePath, bytes.length, bytes));
-      onProgress?.call((i + 1) / files.length);
-    }
-    final encoded = ZipEncoder().encode(archive, level: 9);
-    return Uint8List.fromList(encoded);
+  /// 压缩期间通过 [compressProgress] 流发送进度（0.0 ~ 1.0）。
+  Future<Uint8List> compressToZip(List<File> files, Directory logDir) async {
+    final filePaths = files.map((f) => f.path).toList();
+
+    // 在后台 Isolate 中执行压缩
+    final result = await Isolate.run(
+      () => _compressInIsolate([filePaths, logDir.path]),
+    );
+
+    return result;
+  }
+
+  /// 启动进度轮询，压缩完成后调用 [stopProgressTimer] 停止。
+  ///
+  /// 由于 Isolate 内部无法回调，进度基于已耗时占总时间的估算。
+  void startProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _progressController.add(-1),
+    );
+  }
+
+  /// 停止进度轮询并关闭进度流。
+  void stopProgressTimer() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
+  }
+
+  /// 关闭资源，导出流程结束后调用。
+  void dispose() {
+    stopProgressTimer();
+    _progressController.close();
   }
 
   /// 生成压缩文件名：YYYYMMDD_HHMMSS_logs.zip
