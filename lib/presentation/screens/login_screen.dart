@@ -8,6 +8,7 @@ import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
+import 'package:ffbox_edgelink/presentation/screens/device_info_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
 
 /// 登录页：服务器地址输入、本机免密检测、用户名密码表单。登录成功保存会话并切换到任务列表。
@@ -129,9 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       setState(() {
         _loading = false;
-        _error = e.kind == ApiErrorKind.timeout
-            ? '连接超时'
-            : e.friendlyMessage;
+        _error = e.kind == ApiErrorKind.timeout ? '连接超时' : e.friendlyMessage;
       });
     } catch (e) {
       if (!mounted) return;
@@ -312,47 +311,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ],
                         ),
                       ),
-                      // --- 导出日志按钮（右上角） ---
+                      // --- 右上角按钮组：设备信息 + 导出日志 ---
                       Positioned(
                         top: 12,
                         right: 12,
-                        child: Tooltip(
-                          message: '导出日志',
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const ExportLogsScreen(),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.save_alt,
-                                    size: 16,
-                                    color: AkColors.textSecondary,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _CornerButton(
+                              icon: Icons.info_outline,
+                              tooltip: '设备信息',
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const DeviceInfoScreen(),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'DEBUG LOGOS',
-                                    style: AkTheme.sans(
-                                      fontSize: 12,
-                                      color: AkColors.textSecondary,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
-                          ),
+                            const SizedBox(width: 2),
+                            _CornerButton(
+                              icon: Icons.save_alt,
+                              tooltip: '导出日志',
+                              label: 'DEBUG LOGOS',
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const ExportLogsScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -401,6 +391,58 @@ class _LocalConnectionBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Card corner button (icon + optional label)
+// ---------------------------------------------------------------------------
+
+class _CornerButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final String? label;
+  final VoidCallback onTap;
+
+  const _CornerButton({
+    required this.icon,
+    required this.tooltip,
+    this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: label != null ? 8 : 6,
+            vertical: 6,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: AkColors.textSecondary),
+              if (label != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label!,
+                  style: AkTheme.sans(
+                    fontSize: 12,
+                    color: AkColors.textSecondary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
