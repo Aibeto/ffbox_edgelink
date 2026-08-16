@@ -56,6 +56,97 @@ void main() {
     });
   });
 
+  group('Task run selection', () {
+    test('picks latest running run instead of stale error run', () {
+      final task = Task.fromJson({
+        'taskName': 'x',
+        'status': 'running',
+        'runs': [
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'error',
+            'elapsed': 50,
+            'errorInfo': ['旧错误'],
+            'outputFiles': ['old.mp4'],
+          },
+          {
+            'status': 'running',
+            'elapsed': 5,
+            'errorInfo': [],
+            'outputFiles': ['new.mp4'],
+          },
+        ],
+      });
+      expect(task.elapsedSeconds, 5);
+      expect(task.errorInfo, isEmpty);
+      expect(task.outputFiles, ['new.mp4']);
+    });
+
+    test('idle after reset ignores old run error info', () {
+      final task = Task.fromJson({
+        'taskName': 'x',
+        'status': 'idle',
+        'runs': [
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'error',
+            'elapsed': 50,
+            'errorInfo': ['旧错误'],
+            'outputFiles': ['old.mp4'],
+          },
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+        ],
+      });
+      expect(task.errorInfo, isEmpty);
+      expect(task.elapsedSeconds, 0);
+    });
+
+    test('activeRun returns the latest running run', () {
+      final task = Task.fromJson({
+        'taskName': 'x',
+        'status': 'running',
+        'runs': [
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'error',
+            'elapsed': 50,
+            'errorInfo': ['旧错误'],
+            'outputFiles': ['old.mp4'],
+          },
+          {
+            'status': 'running',
+            'elapsed': 0,
+            'errorInfo': [],
+            'outputFiles': ['new.mp4'],
+          },
+        ],
+      });
+      final run = task.activeRun;
+      expect(run, isNotNull);
+      expect(run!.status, 'running');
+      expect(run.outputFiles, ['new.mp4']);
+      expect(run.errorInfo, isEmpty);
+    });
+
+    test('error run keeps its error when task is in error state', () {
+      final task = Task.fromJson({
+        'taskName': 'x',
+        'status': 'error',
+        'runs': [
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'error',
+            'elapsed': 50,
+            'errorInfo': ['转码失败'],
+            'outputFiles': [],
+          },
+        ],
+      });
+      expect(task.errorInfo, ['转码失败']);
+      expect(task.activeRun?.status, 'error');
+    });
+  });
+
   group('Task.formatDuration', () {
     test('formats seconds', () {
       expect(Task.formatDuration(0), '0:00');

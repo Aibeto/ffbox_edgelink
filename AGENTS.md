@@ -22,6 +22,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - `GET /api/v1/tasks` 为区段接口：`offset`（0-based）、`size`（默认100）、`idOnly`（默认false）；响应 `{taskIds|tasks, totalCount}`，客户端传 `idOnly=true` 取 `taskIds`。
 - 任务操作均为批量接口（`/start`、`/pause`、`/resume`、`/delete`、`/ready`、`/reset`），请求体 `{ids: [...]}`。
 - Task 结构：`{id, taskName, before: InputInfo[], status, runs: Run[]}`；`elapsed/errorInfo/outputFiles` 在 Run 上，不在 Task 顶层。
+- 客户端取「当前 run」必须与后端 `getCurrentRun` 语义一致：runs 数组只追加（reset 追加新 run），从**后往前**取第一条活跃态（running/paused/paused_queued/stopping/finishing）run，无则回退最新一条；禁止从前向后取第一个非 idle 的 run，否则会命中历史出错/完成的旧 run 导致状态停滞。错误信息展示（错误卡片）须按 `task.status == error` 门控，不只看 errorInfo 是否存在。
 - 写操作「查询确认」优先于盲目重试：超时后重查状态确认结果，返回三态（成功/失败/未知）。
 - 网络：连接/发送/接收超时 + 幂等 GET 有限重试；错误统一经 `ApiException` 分类给友好文案，容忍单通与丢包。
 

@@ -102,6 +102,14 @@ class FileLogger {
 
   // --- 日志写入 ---
 
+  /// 仅写入文件（不输出到控制台），供 logDebug 等外部调用。
+  Future<void> logToFileOnly(String message) async {
+    final timestamp = _formatTimestamp(DateTime.now());
+    final logEntry = '[$timestamp] $message';
+    _logBuffer.add(logEntry);
+    await _writeToFile(_logFile, logEntry);
+  }
+
   /// 写入普通日志（同时输出到控制台和文件）。
   Future<void> log(String message) async {
     if (kDebugMode) {

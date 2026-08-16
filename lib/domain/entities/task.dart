@@ -149,12 +149,6 @@ class TaskRunInfo {
     this.inputFilePath = '',
   });
 
-  /// 是否为有实际转码数据的活跃 run。
-  bool get isActive =>
-      status.isNotEmpty &&
-      status != 'idle' &&
-      (elapsed > 0 || progressTime.isNotEmpty || outputFiles.isNotEmpty);
-
   factory TaskRunInfo.fromJson(dynamic json) {
     if (json is! Map) return const TaskRunInfo();
 
@@ -277,12 +271,23 @@ class Task {
     return elapsedSeconds * (1 - progress) / progress;
   }
 
-  /// 活跃 run（有实际转码数据），无则返回 null。
+  /// 活跃运行态集合（与后端 getCurrentRun 判定一致）。
+  static const Set<String> _activeRunStatuses = {
+    'running',
+    'paused',
+    'paused_queued',
+    'stopping',
+    'finishing',
+  };
+
+  /// 当前转码 run。runs[0] 是媒体信息 run，真实转码数据在后续 run 上；
+  /// 从后往前取最新一条活跃态 run（避免命中历史出错/完成的旧 run），
+  /// 全部非活跃时回退到最新一条。
   TaskRunInfo? get activeRun {
-    for (final run in runs) {
-      if (run.isActive) return run;
+    for (final run in runs.reversed) {
+      if (_activeRunStatuses.contains(run.status)) return run;
     }
-    return runs.isEmpty ? null : runs.first;
+    return runs.isEmpty ? null : runs.last;
   }
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -361,8 +366,10 @@ class Task {
     return 0;
   }
 
-  /// 从 runs 中挑选「活跃」run：优先非 idle 状态的 run，
-  /// 其次是有进度/耗时数据的 run，最后回退到第一条。
+  /// 从 runs 中挑选「当前」run（与后端 getCurrentRun 语义一致）：
+  /// 从后往前取第一条活跃态 run；若没有则回退到最新一条。
+  /// 不能从前往后找第一个非 idle 的 run——reset 会追加新 run，
+  /// 历史出错/完成的旧 run 仍保留非 idle 状态，会导致拿到过期数据。
   static Map<String, dynamic>? _pickActiveRun(
     Iterable<Map<String, dynamic>>? runs,
   ) {
@@ -370,21 +377,11 @@ class Task {
     final parsed = runs.toList();
     if (parsed.isEmpty) return null;
 
-    for (final run in parsed) {
-      if (run['status'] is String && run['status'] != 'idle') return run;
+    for (final run in parsed.reversed) {
+      final status = run['status'];
+      if (status is String && _activeRunStatuses.contains(status)) return run;
     }
-    for (final run in parsed) {
-      final elapsed = run['elapsed'];
-      final progressLog = run['progressLog'] as Map<String, dynamic>?;
-      final timeLog = progressLog?['time'] as List<dynamic>?;
-      final hasData =
-          (elapsed is num && elapsed.toDouble() > 0) ||
-          (timeLog != null && timeLog.isNotEmpty) ||
-          run['errorInfo'] is List && (run['errorInfo'] as List).isNotEmpty ||
-          run['outputFiles'] is List && (run['outputFiles'] as List).isNotEmpty;
-      if (hasData) return run;
-    }
-    return parsed.first;
+    return parsed.last;
   }
 
   static TaskStatus _parseStatus(dynamic value) {

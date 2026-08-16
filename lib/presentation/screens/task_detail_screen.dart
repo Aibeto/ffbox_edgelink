@@ -221,7 +221,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 _buildOutputConfigCard(task),
                 _buildProgressCard(task),
                 _buildOutputFilesCard(task),
-                if (task.errorInfo.isNotEmpty) _buildErrorCard(task),
+                if (task.status == TaskStatus.error &&
+                    task.errorInfo.isNotEmpty)
+                  _buildErrorCard(task),
                 _buildLogCard(task),
               ],
             ),

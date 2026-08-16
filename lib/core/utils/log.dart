@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+import 'file_logger.dart';
+
 /// 调试开关：debug 构建为 true，release 构建为 false。
 // const bool kDebugMode = kDebugMode;
 
-/// 仅当 [kDebugMode] 为 true 时输出日志（带时间戳）。
+/// 仅当 [kDebugMode] 为 true 时输出日志（带时间戳），同时写入文件。
 void logDebug(String message) {
   if (kDebugMode) {
     final now = DateTime.now();
@@ -18,5 +20,6 @@ void logDebug(String message) {
         '.${now.millisecond.toString().padLeft(3, '0')}';
     // ignore: avoid_print
     print('[FFBox EdgeLink] ${date}T$time $message');
+    fileLogger.logToFileOnly(message);
   }
 }
