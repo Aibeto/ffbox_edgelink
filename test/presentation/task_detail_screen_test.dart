@@ -166,9 +166,9 @@ void main() {
     expect(find.text('hevc_nvenc'), findsOneWidget);
     expect(find.textContaining('ffmpeg -i in.flv'), findsOneWidget);
     // 输出文件
-    expect(find.text('输出文件（1）'), findsOneWidget);
+    expect(find.text('输出文件'), findsOneWidget);
     // 遥测曲线与日志
-    expect(find.text('转码遥测'), findsOneWidget);
+    expect(find.text('图表'), findsOneWidget);
     expect(find.text('转码日志'), findsOneWidget);
   });
 

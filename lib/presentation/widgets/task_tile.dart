@@ -26,12 +26,16 @@ class TaskTile extends StatelessWidget {
   final bool disabled;
   final VoidCallback? onTap;
 
+  /// 是否为当前实时活动任务（Android Live Updates 通知）。
+  final bool live;
+
   const TaskTile({
     super.key,
     required this.task,
     required this.onOperation,
     this.disabled = false,
     this.onTap,
+    this.live = false,
   });
 
   static const _labels = {
@@ -87,6 +91,14 @@ class TaskTile extends StatelessWidget {
                     children: [
                       StatusBadge(status: task.status),
                       const SizedBox(width: 10),
+                      if (live) ...[
+                        Icon(
+                          Icons.notifications_active,
+                          size: 15,
+                          color: AkColors.info,
+                        ),
+                        const SizedBox(width: 5),
+                      ],
                       Expanded(
                         child: MarqueeText(
                           text: task.taskName,

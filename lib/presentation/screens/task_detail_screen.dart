@@ -479,6 +479,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ],
           const SizedBox(height: 12),
           ?actions,
+          if (ref.read(liveActivityServiceProvider).isSupported) ...[
+            const SizedBox(height: 8),
+            _LiveActivityToggleRow(
+              taskId: widget.taskId,
+              taskName: task.taskName,
+            ),
+          ],
           if (_statusMessage != null) ...[
             const SizedBox(height: 8),
             Row(
@@ -718,7 +725,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         v == null || v <= 0 ? '--' : format(v);
 
     return _SectionCard(
-      title: '转码遥测',
+      title: '图表',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1435,4 +1442,126 @@ String _cleanLogInsertLines(String text) {
       .split('\n')
       .map((line) => pattern.firstMatch(line)?.group(1) ?? line)
       .join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// 实时活动开关：把当前任务推送到系统实时通知（Android 16 Live Updates）
+// ---------------------------------------------------------------------------
+
+/// 实时活动开关行。同一时刻全局仅允许一条实时活动：
+/// 开启新任务会直接替换原生前台服务的当前任务（固定通知 ID 覆盖）。
+class _LiveActivityToggleRow extends ConsumerStatefulWidget {
+  final int taskId;
+  final String taskName;
+
+  const _LiveActivityToggleRow({required this.taskId, required this.taskName});
+
+  @override
+  ConsumerState<_LiveActivityToggleRow> createState() =>
+      _LiveActivityToggleRowState();
+}
+
+class _LiveActivityToggleRowState
+    extends ConsumerState<_LiveActivityToggleRow> {
+  bool _busy = false;
+
+  Future<void> _toggle(bool on) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      if (on) {
+        final session = ref.read(sessionProvider);
+        if (session == null) return;
+        final baseUrl = ref.read(appConfigProvider).normalizedBaseUrl;
+        final ok = await ref
+            .read(liveActivityProvider.notifier)
+            .start(
+              baseUrl: baseUrl,
+              sessionId: session.sessionId,
+              taskId: widget.taskId,
+              taskName: widget.taskName,
+            );
+        if (!ok && mounted) {
+          _showSnack('实时通知需要通知权限，请在系统设置中开启');
+        }
+      } else {
+        await ref.read(liveActivityProvider.notifier).stop();
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: AkTheme.sans(fontSize: 12)),
+        backgroundColor: AkColors.raised,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final live = ref.watch(liveActivityProvider);
+    final active = live.isActiveFor(widget.taskId);
+    final otherActive = live.isActive && !active;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: active ? AkColors.info.withValues(alpha: 0.08) : AkColors.canvas,
+        border: Border.all(
+          color: active
+              ? AkColors.info.withValues(alpha: 0.4)
+              : AkColors.border,
+          width: AkTheme.hairline,
+        ),
+        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            active ? Icons.notifications_active : Icons.notifications_none,
+            size: 16,
+            color: active ? AkColors.info : AkColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  active ? '实时通知中' : '实时通知',
+                  style: AkTheme.sans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: active ? AkColors.info : AkColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  otherActive ? '将替换当前实时通知' : '在AOSP/ColorOS上启用实时通知/流体云',
+                  style: AkTheme.sans(
+                    fontSize: 10,
+                    color: AkColors.textSecondary.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch(
+            value: active,
+            onChanged: _busy ? null : _toggle,
+            activeThumbColor: AkColors.info,
+            activeTrackColor: AkColors.info.withValues(alpha: 0.35),
+            inactiveThumbColor: AkColors.textSecondary,
+            inactiveTrackColor: AkColors.muted,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
+    );
+  }
 }

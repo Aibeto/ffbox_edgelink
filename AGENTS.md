@@ -27,6 +27,19 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 写操作「查询确认」优先于盲目重试：超时后重查状态确认结果，返回三态（成功/失败/未知）。
 - 网络：连接/发送/接收超时 + 幂等 GET 有限重试；错误统一经 `ApiException` 分类给友好文案，容忍单通与丢包。
 
+## Android 实时活动通知（Live Updates）
+
+- 详情页开关将当前任务推送为实时通知；**全局只允许一条**：单例前台服务 `LiveTaskService` + 固定通知 ID `3001`，切换任务直接替换轮询与通知。
+- Android 16 (API 36) 及以上用原生 `Notification.ProgressStyle`（Live Updates，系统自动升级为状态栏/锁屏/主屏芯片）；API < 36 回退 `NotificationCompat` 普通进度通知。`LiveNotificationBuilder` 为唯一渲染入口。
+- 通知布局：title=状态文案（运行/暂停 恒显示 "状态 · 百分比"，其他状态仅 0<x<100 的中间进度显示百分比，0%/100% 不显示）、contentText=任务名、subText=服务器 IP · 剩余时间；**状态文案/信号色与 App 内 `StatusBadge.labelFor`/`colorFor` 完全一致**（notify 侧 `statusText`/`statusColor`/`dotForStatus` 为唯一映射，改动须同步两侧）。右上角 smallIcon 用**形状标识**区分状态（`statusIconFor`：播放/双竖条/时钟/对勾/感叹号/圆点，颜色会被系统单色化，尤其 ColorOS）；trackerIcon（进度条）用状态色圆点（能变色）；BigTextStyle 展开显示"已用/总长/进度百分比/剩余"；按钮按状态语义显示（运行→暂停、暂停/暂停排队→继续、等待 idle→启动，其余状态不显示按钮），用户点击直接调后端 API。
+- 暂停状态（paused/paused_queued）保留通知（ongoing=true）不停止前台服务；终态仅限 finished/error/deleted（不含 idle），命中后 `stopForeground(DETACH)` 保留最终通知。
+- Service 收到 ACTION_PAUSE/ACTION_RESUME/ACTION_START_TASK 时直接 POST `/api/v1/tasks/{pause|resume|start}`（`{ids:[taskId]}`），不依赖 Flutter 侧参与；按钮 PendingIntent 用 `getForegroundService`（API 26+）。**禁止乐观假切换**：先真实调用后端，稍等生效后 `refreshNow()` 拉取真实状态刷新通知（通知始终反映服务器真实状态）；`config` 缺失时从 SharedPreferences 恢复并重启轮询。
+- Live Updates 提升三要素（缺失则降级为普通通知）：manifest 声明 `POST_PROMOTED_NOTIFICATIONS`（非运行时权限）；经 extras `"android.requestPromotedOngoing"=true` 请求提升（compileSdk 36 无 `setRequestPromotedOngoing` API）；channel 重要性 ≥ IMPORTANCE_DEFAULT。状态栏芯片文本用 `setShortCriticalText`。
+- **明文流量前提**：后端为 HTTP 明文（非 HTTPS），主 manifest 必须 `android:usesCleartextTraffic="true"`。原生 `HttpURLConnection`（轮询/按钮调用）受 Android 9+ cleartext 策略拦截，而 Dart 端走 Flutter engine 不受限——缺失该配置会导致「登录/列表正常，但通知轮询与按钮始终失败」的割裂现象。
+- 原生后台轮询 `GET /api/v1/tasks/{id}`（Bearer token，2s 间隔，5s 超时），解析语义与 Dart `Task.fromJson`/`activeRun` 完全一致。
+- MethodChannel 契约 `top.raincrat.aibeto.ffboxedgelink/live_activity`：`start/stop/isRunning/getActiveConfig`；启用前走 POST_NOTIFICATIONS 权限申请。
+- 激活配置存 SharedPreferences（`live_activity_prefs`/`KEY_CONFIG`，Service 自持），App 重启经 `getActiveConfig` 恢复开关态；Dart 侧 `liveActivityProvider` 负责状态同步与校准（列表轮询发现任务消失时 `refresh()` 纠正）。
+
 ## 代码注释规范
 
 - 每个 `.dart` 文件在 import 语句之后、第一个类/函数之前必须有文件级 `///` 文档注释，概述文件职责和在架构中的位置。

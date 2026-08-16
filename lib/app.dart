@@ -6,13 +6,23 @@ import 'package:ffbox_edgelink/presentation/screens/task_list_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 
 /// 根组件 MaterialApp：路由分发、主题配置。未登录→登录页，已登录→任务列表。
-class FFBoxApp extends ConsumerWidget {
+class FFBoxApp extends ConsumerStatefulWidget {
   const FFBoxApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // --- 路由与主题 ---
+  ConsumerState<FFBoxApp> createState() => _FFBoxAppState();
+}
 
+class _FFBoxAppState extends ConsumerState<FFBoxApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 启动时恢复实时活动状态（原生服务可能仍在运行）
+    Future.microtask(() => ref.read(liveActivityProvider.notifier).restore());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     return MaterialApp(
       title: 'FFBox EdgeLink',

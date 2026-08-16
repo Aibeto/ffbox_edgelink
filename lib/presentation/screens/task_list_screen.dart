@@ -72,6 +72,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         _statusMessage = null;
         _statusTaskId = null;
       });
+      _reconcileLiveActivity(result.tasks);
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.isUnauthorized) {
@@ -109,6 +110,17 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
     _refresh();
+  }
+
+  /// 校准实时活动标记：原生前台服务在任务终态/被删时自停，这里同步纠正 UI 状态。
+  void _reconcileLiveActivity(List<Task> tasks) {
+    final liveState = ref.read(liveActivityProvider);
+    if (!liveState.isActive) return;
+    final activeId = liveState.config!.taskId;
+    final stillExists = tasks.any((t) => t.id == activeId);
+    if (!stillExists) {
+      Future.microtask(() => ref.read(liveActivityProvider.notifier).refresh());
+    }
   }
 
   Future<void> _logout() async {
@@ -203,6 +215,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final deviceName = _hostOf(session?.baseUrl);
+    final live = ref.watch(liveActivityProvider);
 
     return Scaffold(
       appBar: _AkAppBar(
@@ -345,6 +358,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         final task = tasks[i];
                         return TaskTile(
                           task: task,
+                          live: live.isActiveFor(task.id),
                           disabled: _busyTaskIds.contains(task.id),
                           onOperation: (op) => _onOperation(task, op),
                           onTap: () => _openDetail(task),
