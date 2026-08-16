@@ -19,6 +19,8 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
   // --- 状态 ---
 
   final _service = LogExportService();
+  StreamSubscription<double>? _progressSub;
+  DateTime _compressStartTime = DateTime.now();
   String _statusText = '正在扫描日志…';
   double _compressProgress = 0;
   bool _showProgress = false;
@@ -26,6 +28,13 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
   String? _error;
 
   // --- 初始化 ---
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    _service.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -99,19 +108,31 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
         return;
       }
 
-      // 3. 压缩（仅此阶段显示进度条）
+      // 3. 压缩（在后台 Isolate 中执行，不阻塞 UI）
       setState(() {
         _statusText = '正在压缩 ${files.length} 个文件…';
         _showProgress = true;
         _compressProgress = 0;
+        _compressStartTime = DateTime.now();
       });
-      final zipBytes = await _service.compressToZip(
-        files,
-        logDir,
-        onProgress: (p) {
-          if (mounted) setState(() => _compressProgress = p);
-        },
-      );
+      _service.startProgressTimer();
+      _progressSub = _service.compressProgress.listen((v) {
+        // -1 表示从定时器触发，使用估算进度
+        if (v < 0) {
+          final elapsed = DateTime.now()
+              .difference(_compressStartTime)
+              .inMilliseconds;
+          final estimated = (elapsed / (elapsed + 3000)).clamp(0.0, 0.95);
+          if (mounted) setState(() => _compressProgress = estimated);
+        } else {
+          if (mounted) setState(() => _compressProgress = v);
+        }
+      });
+      final zipBytes = await _service.compressToZip(files, logDir);
+      _service.stopProgressTimer();
+      await _progressSub?.cancel();
+      _progressSub = null;
+      if (mounted) setState(() => _compressProgress = 1.0);
       await fileLogger.log(
         'exportLogs: 压缩完成，${files.length} 个文件共 ${zipBytes.length} 字节',
       );
