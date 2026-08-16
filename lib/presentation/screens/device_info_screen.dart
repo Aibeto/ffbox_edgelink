@@ -52,6 +52,7 @@ class _DeviceInfoScreenState extends State<DeviceInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('接口与IP')),
       body: FutureBuilder<List<NetworkInterface>>(
         future: _interfaces,
         builder: (context, snapshot) {
@@ -83,47 +84,6 @@ class _DeviceInfoScreenState extends State<DeviceInfoScreen> {
           return CustomScrollView(
             slivers: [
               // --- 表头 ---
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: SizedBox(
-                    height: 18,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned(
-                          left: 0,
-                          bottom: 0,
-                          width: _ifaceWidth > 0 ? _ifaceWidth : null,
-                          child: Text(
-                            '接口',
-                            style: AkTheme.sans(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AkColors.textSecondary,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: _ifaceWidth > 0 ? _ifaceWidth + 8 : 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Text(
-                            'IP',
-                            style: AkTheme.sans(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AkColors.textSecondary,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -173,12 +133,11 @@ class _DataRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Stack(
-        clipBehavior: Clip.none,
+      // 用 Row 而非 Stack：Row 高度由内容决定，可安全用于 SliverList 的无界高度约束
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            left: 0,
-            top: 0,
+          SizedBox(
             width: ifaceWidth > 0 ? ifaceWidth : null,
             child: Text(
               row.iface,
@@ -186,10 +145,8 @@ class _DataRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Positioned(
-            left: ifaceWidth > 0 ? ifaceWidth + 8 : 0,
-            right: 0,
-            top: 0,
+          if (ifaceWidth > 0) const SizedBox(width: 8),
+          Expanded(
             child: Text(
               row.address,
               style: AkTheme.mono(fontSize: 13, color: AkColors.textPrimary),

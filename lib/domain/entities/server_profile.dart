@@ -10,7 +10,7 @@ class ServerProfile {
     required this.username,
     this.password = '',
     DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }) : timestamp = timestamp ?? DateTime.now();
 
   /// 从 JSON 构造（历史记录反序列化用）。
   factory ServerProfile.fromJson(Map<String, dynamic> json) {

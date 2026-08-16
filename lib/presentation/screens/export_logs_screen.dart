@@ -157,7 +157,7 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
       if (result == null) {
         // 用户取消
         await fileLogger.log('exportLogs: 用户取消保存');
-        _finish('已取消');
+        _finish('已取消', isError: true);
       } else if (result.isEmpty) {
         // 保存失败（返回空串）
         await fileLogger.log('exportLogs: 保存失败，返回空路径');

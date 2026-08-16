@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
@@ -29,8 +28,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _baseUrlFocus = FocusNode();
   bool _loading = false;
   String? _error;
-  bool _isLocalhost = false;
-  Timer? _debounce;
   List<ServerProfile> _history = const [];
   Map<String, int> _latency = {};
   Timer? _latencyTimer;
@@ -46,17 +43,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       const Duration(seconds: 2),
       (_) => _pingAll(),
     );
-    _baseUrlController.addListener(() {
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 300), () {
-        if (mounted) _checkLocalhost(_baseUrlController.text);
-      });
-    });
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _latencyTimer?.cancel();
     _baseUrlController.dispose();
     _usernameController.dispose();
@@ -73,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() {
         _baseUrlController.text = profile.baseUrl;
         _usernameController.text = profile.username;
-        _checkLocalhost(profile.baseUrl);
+        // _checkLocalhost(profile.baseUrl);
       });
     }
   }
@@ -99,35 +89,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<int?> _pingUrl(String url) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
     try {
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 3);
       final sw = Stopwatch()..start();
       final req = await client
           .getUrl(Uri.parse(url))
           .timeout(const Duration(seconds: 3));
       await req.close().timeout(const Duration(seconds: 3));
       sw.stop();
-      client.close(force: true);
       return sw.elapsedMilliseconds;
     } catch (_) {
       return null;
+    } finally {
+      client.close(force: true);
     }
   }
 
-  // --- 本机检测 ---
+  // --- 本机检测（已禁用） ---
 
-  void _checkLocalhost(String url) {
-    final isLocal = AppConfig(baseUrl: url).isLocalhost;
-    if (isLocal != _isLocalhost) {
-      setState(() => _isLocalhost = isLocal);
-    }
-  }
-
-  bool get _needsPassword {
-    final baseUrl = _baseUrlController.text.trim();
-    return baseUrl.isNotEmpty && !_isLocalhost;
-  }
+  bool get _needsPassword => _baseUrlController.text.trim().isNotEmpty;
 
   // --- 历史快捷登录 ---
 
@@ -138,7 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _passwordController.text = entry.password;
       _error = null;
     });
-    _checkLocalhost(entry.baseUrl);
+    // _checkLocalhost(entry.baseUrl);
     // 非本机且有密码时自动提交
     if (entry.password.isNotEmpty) {
       _submit();
@@ -261,7 +241,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 _CornerButton(
                   icon: Icons.info_outline,
-                  tooltip: '设备信息',
+                  tooltip: '接口与IP',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -274,7 +254,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 _CornerButton(
                   icon: Icons.save_alt,
                   tooltip: '导出日志',
-                  label: 'DEBUG LOGOS',
+                  label: 'LOG',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -288,88 +268,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
 
           // --- 主体内容 ---
-          SafeArea(
-            child: Column(
-              children: [
-                // --- 标题 ---
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'FFBox',
-                          style: AkTheme.sans(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w800,
-                            color: AkColors.textPrimary,
-                            letterSpacing: 2.0,
-                            height: 1.0,
+          Positioned.fill(
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // --- 标题 ---
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'FFBox',
+                            style: AkTheme.sans(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w800,
+                              color: AkColors.textPrimary,
+                              letterSpacing: 2.0,
+                              height: 1.0,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'EdgeLink',
-                          style: AkTheme.sans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            color: AkColors.textSecondary,
-                            letterSpacing: 4.0,
+                          const SizedBox(height: 4),
+                          Text(
+                            'EdgeLink',
+                            style: AkTheme.sans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: AkColors.textSecondary,
+                              letterSpacing: 4.0,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                // --- 表单 ---
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // --- 服务器地址 ---
-                      Text(
-                        'SERVER',
-                        style: AkTheme.sans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AkColors.textSecondary,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _baseUrlController,
-                        focusNode: _baseUrlFocus,
-                        style: AkTheme.mono(
-                          fontSize: 14,
-                          color: AkColors.textPrimary,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'http(s)://server-address:port',
-                        ),
-                        textInputAction: TextInputAction.next,
-                        onSubmitted: (_) {
-                          if (_needsPassword) {
-                            FocusScope.of(context).nextFocus();
-                          }
-                        },
-                      ),
-
-                      // --- 本机连接提示 ---
-                      if (_isLocalhost) ...[
-                        const SizedBox(height: 12),
-                        const _LocalConnectionBanner(),
-                      ],
-
-                      // --- 凭据输入 ---
-                      if (_needsPassword) ...[
-                        const SizedBox(height: 20),
+                  // --- 表单 ---
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- 服务器地址 ---
                         Text(
-                          'CREDENTIALS',
+                          'SERVER',
                           style: AkTheme.sans(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -379,112 +323,148 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 6),
                         TextField(
-                          controller: _usernameController,
-                          style: AkTheme.sans(color: AkColors.textPrimary),
+                          controller: _baseUrlController,
+                          focusNode: _baseUrlFocus,
+                          style: AkTheme.mono(
+                            fontSize: 14,
+                            color: AkColors.textPrimary,
+                          ),
                           decoration: const InputDecoration(
-                            hintText: '用户名（选填）',
+                            hintText: 'http(s)://server-address:port',
                           ),
                           textInputAction: TextInputAction.next,
+                          onSubmitted: (_) {
+                            if (_needsPassword) {
+                              FocusScope.of(context).nextFocus();
+                            }
+                          },
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          style: AkTheme.sans(color: AkColors.textPrimary),
-                          decoration: const InputDecoration(hintText: '密码（选填）'),
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _submit(),
-                        ),
-                      ],
 
-                      // --- 错误信息 ---
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
+                        // --- 凭据输入 ---
+                        if (_needsPassword) ...[
+                          const SizedBox(height: 20),
+                          Text(
+                            'CREDENTIALS',
+                            style: AkTheme.sans(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AkColors.textSecondary,
+                              letterSpacing: 1.5,
+                            ),
                           ),
-                          decoration: BoxDecoration(
-                            color: AkColors.danger.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                            border: Border(
-                              left: BorderSide(
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _usernameController,
+                            style: AkTheme.sans(color: AkColors.textPrimary),
+                            decoration: const InputDecoration(
+                              hintText: '用户名（选填）',
+                            ),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: AkTheme.sans(color: AkColors.textPrimary),
+                            decoration: const InputDecoration(
+                              hintText: '密码（选填）',
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                          ),
+                        ],
+
+                        // --- 错误信息 ---
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AkColors.danger.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(
+                                AkTheme.cutSm,
+                              ),
+                              border: Border(
+                                left: BorderSide(
+                                  color: AkColors.danger,
+                                  width: AkTheme.signalBorder,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: AkTheme.sans(
+                                fontSize: 13,
                                 color: AkColors.danger,
-                                width: AkTheme.signalBorder,
                               ),
                             ),
                           ),
-                          child: Text(
-                            _error!,
+                        ],
+
+                        // --- 提交按钮 ---
+                        const SizedBox(height: 24),
+                        _AkButton(
+                          label: _loading ? null : 'LOGIN',
+                          backgroundColor: AkColors.info,
+                          foregroundColor: AkColors.textInverse,
+                          loading: _loading,
+                          onPressed: _loading ? null : _submit,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // --- 分割线 ---
+                  if (_history.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Row(
+                        children: [
+                          Text(
+                            'RECENT',
                             style: AkTheme.sans(
-                              fontSize: 13,
-                              color: AkColors.danger,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AkColors.textSecondary,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                        ),
-                      ],
-
-                      // --- 提交按钮 ---
-                      const SizedBox(height: 24),
-                      _AkButton(
-                        label: _loading ? null : '登录',
-                        backgroundColor: AkColors.info,
-                        foregroundColor: AkColors.textInverse,
-                        loading: _loading,
-                        onPressed: _loading ? null : _submit,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Divider(height: 1, color: AkColors.border),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-
-                // --- 分割线 ---
-                if (_history.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        Text(
-                          'RECENT',
-                          style: AkTheme.sans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AkColors.textSecondary,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Divider(height: 1, color: AkColors.border),
-                        ),
-                      ],
                     ),
-                  ),
+                  ],
+
+                  // --- 历史连接列表（最多显示 20 条） ---
+                  if (_history.isNotEmpty)
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                        itemCount: _history.length.clamp(0, 20),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, i) {
+                          final entry = _history[i];
+                          return _SwipeReveal(
+                            onDeleted: () => _deleteHistory(entry),
+                            child: _HistoryTile(
+                              entry: entry,
+                              timeLabel: _formatTime(entry.timestamp),
+                              latency: _latency[entry.baseUrl],
+                              onTap: () => _quickLogin(entry),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                 ],
-
-                // --- 历史连接列表（最多显示 20 条） ---
-                if (_history.isNotEmpty)
-                  Expanded(
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                      itemCount: _history.length.clamp(0, 20),
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final entry = _history[i];
-                        return _SwipeReveal(
-                          onDeleted: () => _deleteHistory(entry),
-                          child: _HistoryTile(
-                            entry: entry,
-                            timeLabel: _formatTime(entry.timestamp),
-                            latency: _latency[entry.baseUrl],
-                            onTap: () => _quickLogin(entry),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
         ],
@@ -496,41 +476,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 // ---------------------------------------------------------------------------
 // Local connection banner
 // ---------------------------------------------------------------------------
-
-class _LocalConnectionBanner extends StatelessWidget {
-  const _LocalConnectionBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AkColors.success.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
-        border: Border(
-          left: BorderSide(
-            color: AkColors.success,
-            width: AkTheme.signalBorder,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.link, size: 16, color: AkColors.success),
-          const SizedBox(width: 8),
-          Text(
-            '匿名登录',
-            style: AkTheme.sans(
-              fontSize: 13,
-              color: AkColors.success,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // 左滑露出删除按钮
@@ -546,18 +491,57 @@ class _SwipeReveal extends StatefulWidget {
   State<_SwipeReveal> createState() => _SwipeRevealState();
 }
 
-class _SwipeRevealState extends State<_SwipeReveal> {
+class _SwipeRevealState extends State<_SwipeReveal>
+    with SingleTickerProviderStateMixin {
   static const _deleteWidth = 64.0;
   static const _threshold = 0.5;
 
-  double _offset = 0;
+  /// 滑动进度 0（收起）~ 1（完全露出删除按钮）。
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _slide = Tween(
+      begin: Offset.zero,
+      end: const Offset(-1, 0),
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    // 左滑 delta.dx 为负，将像素位移折算为 0~1 进度
+    _controller.value = (_controller.value + d.delta.dx / -_deleteWidth).clamp(
+      0.0,
+      1.0,
+    );
+    setState(() {});
+  }
+
+  void _onDragEnd(DragEndDetails _) {
+    if (_controller.value > _threshold) {
+      _controller.animateTo(1);
+    } else {
+      _controller.animateTo(0);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // --- 删除背景（固定在右侧） ---
+        // --- 删除背景（Positioned 固定在右侧，垂直拉伸与内容同高） ---
         Positioned(
           right: 0,
           top: 0,
@@ -566,7 +550,7 @@ class _SwipeRevealState extends State<_SwipeReveal> {
           child: GestureDetector(
             onTap: () {
               widget.onDeleted();
-              setState(() => _offset = 0);
+              _controller.value = 0;
             },
             child: Container(
               color: AkColors.danger.withValues(alpha: 0.15),
@@ -579,24 +563,13 @@ class _SwipeRevealState extends State<_SwipeReveal> {
             ),
           ),
         ),
-        // --- 内容层（Transform 滑动，不触发布局重建） ---
-        Positioned.fill(
-          child: Transform.translate(
-            offset: Offset(_offset, 0),
-            child: GestureDetector(
-              onHorizontalDragUpdate: (d) {
-                setState(() {
-                  _offset = (_offset + d.delta.dx).clamp(-_deleteWidth, 0.0);
-                });
-              },
-              onHorizontalDragEnd: (_) {
-                final revealed = _offset.abs() / _deleteWidth;
-                setState(() {
-                  _offset = revealed > _threshold ? -_deleteWidth : 0.0;
-                });
-              },
-              child: widget.child,
-            ),
+        // --- 内容层（非 Positioned，作为 Stack 尺寸来源；ListView 高度无界时必须如此） ---
+        SlideTransition(
+          position: _slide,
+          child: GestureDetector(
+            onHorizontalDragUpdate: _onDragUpdate,
+            onHorizontalDragEnd: _onDragEnd,
+            child: widget.child,
           ),
         ),
       ],
