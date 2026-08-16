@@ -11,7 +11,7 @@ import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/screens/device_info_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
 
-/// 登录页：服务器地址输入、本机免密检测、用户名密码表单。登录成功保存会话并切换到任务列表。
+/// 登录页：全屏布局，上方表单输入，下方历史连接列表支持快捷登录。
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -30,21 +30,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   bool _isLocalhost = false;
   Timer? _debounce;
+  List<ServerProfile> _history = const [];
 
   // --- 初始化与销毁 ---
 
   @override
   void initState() {
     super.initState();
-    ref.read(serverRepositoryProvider).load().then((profile) {
-      if (profile != null && mounted) {
-        setState(() {
-          _baseUrlController.text = profile.baseUrl;
-          _usernameController.text = profile.username;
-          _checkLocalhost(profile.baseUrl);
-        });
-      }
-    });
+    _loadProfile();
+    _loadHistory();
     _baseUrlController.addListener(() {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 300), () {
@@ -63,6 +57,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  // --- 数据加载 ---
+
+  Future<void> _loadProfile() async {
+    final profile = await ref.read(serverRepositoryProvider).load();
+    if (profile != null && mounted) {
+      setState(() {
+        _baseUrlController.text = profile.baseUrl;
+        _usernameController.text = profile.username;
+        _checkLocalhost(profile.baseUrl);
+      });
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    final history = await ref.read(serverRepositoryProvider).loadHistory();
+    if (mounted) setState(() => _history = history);
+  }
+
   // --- 本机检测 ---
 
   void _checkLocalhost(String url) {
@@ -77,6 +89,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return baseUrl.isNotEmpty && !_isLocalhost;
   }
 
+  // --- 历史快捷登录 ---
+
+  void _quickLogin(ServerProfile entry) {
+    setState(() {
+      _baseUrlController.text = entry.baseUrl;
+      _usernameController.text = entry.username;
+      _passwordController.text = entry.password;
+      _error = null;
+    });
+    _checkLocalhost(entry.baseUrl);
+    // 非本机且有密码时自动提交
+    if (entry.password.isNotEmpty) {
+      _submit();
+    }
+  }
+
   // --- 登录提交 ---
 
   Future<void> _submit() async {
@@ -88,11 +116,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = '请输入服务器地址');
       return;
     }
-
-    // if (_needsPassword && (username.isEmpty || password.isEmpty)) {
-    //   setState(() => _error = '请输入用户名和密码');
-    //   return;
-    // }
 
     logDebug('loginUI: 提交登录 baseUrl=$baseUrl username=$username');
     setState(() {
@@ -120,6 +143,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(serverRepositoryProvider)
           .save(ServerProfile(baseUrl: baseUrl, username: username));
+      await ref
+          .read(serverRepositoryProvider)
+          .saveToHistory(
+            ServerProfile(
+              baseUrl: baseUrl,
+              username: username,
+              password: password,
+              timestamp: DateTime.now(),
+            ),
+          );
       await ref.read(sessionRepositoryProvider).save(session);
       logDebug('loginUI: 登录成功，保存会话并切换到任务列表');
       ref.read(sessionProvider.notifier).update(session);
@@ -142,6 +175,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  // --- 格式化时间 ---
+
+  String _formatTime(DateTime dt) {
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$m-$d $h:$min';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -155,200 +198,232 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             size: Size.infinite,
           ),
 
-          // --- 登录卡片 ---
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: _AkCard(
-                  signalColor: AkColors.info,
-                  child: Stack(
+          // --- 右上角按钮组 ---
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CornerButton(
+                  icon: Icons.info_outline,
+                  tooltip: '设备信息',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const DeviceInfoScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 2),
+                _CornerButton(
+                  icon: Icons.save_alt,
+                  tooltip: '导出日志',
+                  label: 'DEBUG LOGOS',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ExportLogsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // --- 主体内容 ---
+          SafeArea(
+            child: Column(
+              children: [
+                // --- 标题 ---
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'FFBox',
+                          style: AkTheme.sans(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
+                            color: AkColors.textPrimary,
+                            letterSpacing: 2.0,
+                            height: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'EdgeLink',
+                          style: AkTheme.sans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            color: AkColors.textSecondary,
+                            letterSpacing: 4.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // --- 表单 ---
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // --- 标题 ---
-                            Text(
-                              'FFBox',
-                              style: AkTheme.sans(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w800,
-                                color: AkColors.textPrimary,
-                                letterSpacing: 2.0,
-                                height: 1.0,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'EdgeLink',
-                              style: AkTheme.sans(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                color: AkColors.textSecondary,
-                                letterSpacing: 4.0,
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-
-                            // --- 服务器地址 ---
-                            Text(
-                              'SERVER',
-                              style: AkTheme.sans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: AkColors.textSecondary,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _baseUrlController,
-                              focusNode: _baseUrlFocus,
-                              style: AkTheme.mono(
-                                fontSize: 14,
-                                color: AkColors.textPrimary,
-                              ),
-                              decoration: const InputDecoration(
-                                hintText: 'http(s)://server-address:port',
-                              ),
-                              textInputAction: TextInputAction.next,
-                              onSubmitted: (_) {
-                                if (_needsPassword) {
-                                  FocusScope.of(context).nextFocus();
-                                }
-                              },
-                            ),
-
-                            // --- 本机连接提示 ---
-                            if (_isLocalhost) ...[
-                              const SizedBox(height: 12),
-                              const _LocalConnectionBanner(),
-                            ],
-
-                            // --- 凭据输入（非本机时显示） ---
-                            if (_needsPassword) ...[
-                              const SizedBox(height: 20),
-                              Text(
-                                'CREDENTIALS',
-                                style: AkTheme.sans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: AkColors.textSecondary,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextField(
-                                controller: _usernameController,
-                                style: AkTheme.sans(
-                                  color: AkColors.textPrimary,
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: '用户名（选填）',
-                                ),
-                                textInputAction: TextInputAction.next,
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: _passwordController,
-                                obscureText: true,
-                                style: AkTheme.sans(
-                                  color: AkColors.textPrimary,
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: '密码（选填）',
-                                ),
-                                textInputAction: TextInputAction.done,
-                                onSubmitted: (_) => _submit(),
-                              ),
-                            ],
-
-                            // --- Error message ---
-                            if (_error != null) ...[
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AkColors.danger.withValues(
-                                    alpha: 0.12,
-                                  ),
-                                  borderRadius: BorderRadius.circular(
-                                    AkTheme.cutSm,
-                                  ),
-                                  border: Border(
-                                    left: BorderSide(
-                                      color: AkColors.danger,
-                                      width: AkTheme.signalBorder,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  _error!,
-                                  style: AkTheme.sans(
-                                    fontSize: 13,
-                                    color: AkColors.danger,
-                                  ),
-                                ),
-                              ),
-                            ],
-
-                            // --- 提交按钮 ---
-                            const SizedBox(height: 24),
-                            _AkButton(
-                              label: _loading ? null : '登录',
-                              backgroundColor: AkColors.info,
-                              foregroundColor: AkColors.textInverse,
-                              loading: _loading,
-                              onPressed: _loading ? null : _submit,
-                            ),
-                          ],
+                      // --- 服务器地址 ---
+                      Text(
+                        'SERVER',
+                        style: AkTheme.sans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AkColors.textSecondary,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                      // --- 右上角按钮组：设备信息 + 导出日志 ---
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _CornerButton(
-                              icon: Icons.info_outline,
-                              tooltip: '设备信息',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const DeviceInfoScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 2),
-                            _CornerButton(
-                              icon: Icons.save_alt,
-                              tooltip: '导出日志',
-                              label: 'DEBUG LOGOS',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const ExportLogsScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _baseUrlController,
+                        focusNode: _baseUrlFocus,
+                        style: AkTheme.mono(
+                          fontSize: 14,
+                          color: AkColors.textPrimary,
                         ),
+                        decoration: const InputDecoration(
+                          hintText: 'http(s)://server-address:port',
+                        ),
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) {
+                          if (_needsPassword) {
+                            FocusScope.of(context).nextFocus();
+                          }
+                        },
+                      ),
+
+                      // --- 本机连接提示 ---
+                      if (_isLocalhost) ...[
+                        const SizedBox(height: 12),
+                        const _LocalConnectionBanner(),
+                      ],
+
+                      // --- 凭据输入 ---
+                      if (_needsPassword) ...[
+                        const SizedBox(height: 20),
+                        Text(
+                          'CREDENTIALS',
+                          style: AkTheme.sans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AkColors.textSecondary,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _usernameController,
+                          style: AkTheme.sans(color: AkColors.textPrimary),
+                          decoration: const InputDecoration(
+                            hintText: '用户名（选填）',
+                          ),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          style: AkTheme.sans(color: AkColors.textPrimary),
+                          decoration: const InputDecoration(hintText: '密码（选填）'),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                      ],
+
+                      // --- 错误信息 ---
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AkColors.danger.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                            border: Border(
+                              left: BorderSide(
+                                color: AkColors.danger,
+                                width: AkTheme.signalBorder,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            _error!,
+                            style: AkTheme.sans(
+                              fontSize: 13,
+                              color: AkColors.danger,
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      // --- 提交按钮 ---
+                      const SizedBox(height: 24),
+                      _AkButton(
+                        label: _loading ? null : '登录',
+                        backgroundColor: AkColors.info,
+                        foregroundColor: AkColors.textInverse,
+                        loading: _loading,
+                        onPressed: _loading ? null : _submit,
                       ),
                     ],
                   ),
                 ),
-              ),
+
+                // --- 分割线 ---
+                if (_history.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        Text(
+                          'RECENT',
+                          style: AkTheme.sans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AkColors.textSecondary,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Divider(height: 1, color: AkColors.border),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // --- 历史连接列表 ---
+                if (_history.isNotEmpty)
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                      itemCount: _history.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _HistoryTile(
+                        entry: _history[i],
+                        timeLabel: _formatTime(_history[i].timestamp),
+                        onTap: () => _quickLogin(_history[i]),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -449,32 +524,70 @@ class _CornerButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// ak-ui Card with left signal border and clipped top-right corner
+// 历史连接条目
 // ---------------------------------------------------------------------------
 
-class _AkCard extends StatelessWidget {
-  final Widget child;
-  final Color signalColor;
+class _HistoryTile extends StatelessWidget {
+  final ServerProfile entry;
+  final String timeLabel;
+  final VoidCallback onTap;
 
-  const _AkCard({required this.child, required this.signalColor});
+  const _HistoryTile({
+    required this.entry,
+    required this.timeLabel,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AkTheme.cardRadius),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AkColors.panel,
-          border: Border(
-            left: BorderSide(color: signalColor, width: AkTheme.signalBorder),
-            top: const BorderSide(color: AkColors.border),
-            right: const BorderSide(color: AkColors.border),
-            bottom: const BorderSide(color: AkColors.border),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AkColors.panel,
+            border: Border.all(color: AkColors.border),
           ),
-        ),
-        child: ClipPath(
-          clipper: _TopRightCutClipper(cut: AkTheme.cornerCut),
-          child: child,
+          child: Row(
+            children: [
+              // --- 连接信息 ---
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.baseUrl,
+                      style: AkTheme.mono(
+                        fontSize: 13,
+                        color: AkColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      entry.username.isNotEmpty ? entry.username : '免密',
+                      style: AkTheme.sans(
+                        fontSize: 12,
+                        color: AkColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // --- 时间 ---
+              Text(
+                timeLabel,
+                style: AkTheme.sans(
+                  fontSize: 11,
+                  color: AkColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
