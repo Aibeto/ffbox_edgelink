@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLocalhost = false;
   Timer? _debounce;
   List<ServerProfile> _history = const [];
+  Map<String, int> _latency = {};
+  Timer? _latencyTimer;
 
   // --- 初始化与销毁 ---
 
@@ -39,6 +42,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     _loadProfile();
     _loadHistory();
+    _latencyTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _pingAll(),
+    );
     _baseUrlController.addListener(() {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 300), () {
@@ -50,6 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _latencyTimer?.cancel();
     _baseUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
@@ -73,6 +81,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _loadHistory() async {
     final history = await ref.read(serverRepositoryProvider).loadHistory();
     if (mounted) setState(() => _history = history);
+  }
+
+  // --- 延迟探测 ---
+
+  Future<void> _pingAll() async {
+    if (_history.isEmpty) return;
+    final urls = _history.map((p) => p.baseUrl).toSet();
+    final results = <String, int>{};
+    await Future.wait([
+      for (final url in urls)
+        _pingUrl(url).then((ms) {
+          if (ms != null) results[url] = ms;
+        }),
+    ]);
+    if (mounted) setState(() => _latency = results);
+  }
+
+  Future<int?> _pingUrl(String url) async {
+    try {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
+      final sw = Stopwatch()..start();
+      final req = await client
+          .getUrl(Uri.parse(url))
+          .timeout(const Duration(seconds: 3));
+      await req.close().timeout(const Duration(seconds: 3));
+      sw.stop();
+      client.close(force: true);
+      return sw.elapsedMilliseconds;
+    } catch (_) {
+      return null;
+    }
   }
 
   // --- 本机检测 ---
@@ -173,6 +213,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _error = '登录失败：$e';
       });
     }
+  }
+
+  // --- 删除历史记录 ---
+
+  Future<void> _deleteHistory(ServerProfile entry) async {
+    await ref.read(serverRepositoryProvider).deleteFromHistory(entry);
+    setState(() {
+      _history = _history
+          .where(
+            (p) =>
+                !(p.baseUrl == entry.baseUrl && p.username == entry.username),
+          )
+          .toList();
+    });
   }
 
   // --- 格式化时间 ---
@@ -386,7 +440,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // --- 分割线 ---
                 if (_history.isNotEmpty) ...[
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
@@ -409,18 +463,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
 
-                // --- 历史连接列表 ---
+                // --- 历史连接列表（最多显示 20 条） ---
                 if (_history.isNotEmpty)
                   Expanded(
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-                      itemCount: _history.length,
+                      itemCount: _history.length.clamp(0, 20),
                       separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) => _HistoryTile(
-                        entry: _history[i],
-                        timeLabel: _formatTime(_history[i].timestamp),
-                        onTap: () => _quickLogin(_history[i]),
-                      ),
+                      itemBuilder: (_, i) {
+                        final entry = _history[i];
+                        return _SwipeReveal(
+                          onDeleted: () => _deleteHistory(entry),
+                          child: _HistoryTile(
+                            entry: entry,
+                            timeLabel: _formatTime(entry.timestamp),
+                            latency: _latency[entry.baseUrl],
+                            onTap: () => _quickLogin(entry),
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],
@@ -458,7 +519,7 @@ class _LocalConnectionBanner extends StatelessWidget {
           Icon(Icons.link, size: 16, color: AkColors.success),
           const SizedBox(width: 8),
           Text(
-            '本机连接，免密登录',
+            '匿名登录',
             style: AkTheme.sans(
               fontSize: 13,
               color: AkColors.success,
@@ -467,6 +528,78 @@ class _LocalConnectionBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 左滑露出删除按钮
+// ---------------------------------------------------------------------------
+
+class _SwipeReveal extends StatefulWidget {
+  final VoidCallback onDeleted;
+  final Widget child;
+
+  const _SwipeReveal({required this.onDeleted, required this.child});
+
+  @override
+  State<_SwipeReveal> createState() => _SwipeRevealState();
+}
+
+class _SwipeRevealState extends State<_SwipeReveal> {
+  static const _deleteWidth = 64.0;
+  static const _threshold = 0.5;
+
+  double _offset = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // --- 删除背景（固定在右侧） ---
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: _deleteWidth,
+          child: GestureDetector(
+            onTap: () {
+              widget.onDeleted();
+              setState(() => _offset = 0);
+            },
+            child: Container(
+              color: AkColors.danger.withValues(alpha: 0.15),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.delete_outline,
+                color: AkColors.danger,
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+        // --- 内容层（Transform 滑动，不触发布局重建） ---
+        Positioned.fill(
+          child: Transform.translate(
+            offset: Offset(_offset, 0),
+            child: GestureDetector(
+              onHorizontalDragUpdate: (d) {
+                setState(() {
+                  _offset = (_offset + d.delta.dx).clamp(-_deleteWidth, 0.0);
+                });
+              },
+              onHorizontalDragEnd: (_) {
+                final revealed = _offset.abs() / _deleteWidth;
+                setState(() {
+                  _offset = revealed > _threshold ? -_deleteWidth : 0.0;
+                });
+              },
+              child: widget.child,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -530,11 +663,13 @@ class _CornerButton extends StatelessWidget {
 class _HistoryTile extends StatelessWidget {
   final ServerProfile entry;
   final String timeLabel;
+  final int? latency;
   final VoidCallback onTap;
 
   const _HistoryTile({
     required this.entry,
     required this.timeLabel,
+    this.latency,
     required this.onTap,
   });
 
@@ -568,7 +703,7 @@ class _HistoryTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      entry.username.isNotEmpty ? entry.username : '免密',
+                      entry.username.isNotEmpty ? entry.username : '匿名',
                       style: AkTheme.sans(
                         fontSize: 12,
                         color: AkColors.textSecondary,
@@ -578,13 +713,30 @@ class _HistoryTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // --- 时间 ---
-              Text(
-                timeLabel,
-                style: AkTheme.sans(
-                  fontSize: 11,
-                  color: AkColors.textSecondary,
-                ),
+              // --- 时间 + 延迟 ---
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeLabel,
+                    style: AkTheme.sans(
+                      fontSize: 11,
+                      color: AkColors.textSecondary,
+                    ),
+                  ),
+                  if (latency != null)
+                    Text(
+                      '${latency}ms',
+                      style: AkTheme.sans(
+                        fontSize: 11,
+                        color: latency! < 200
+                            ? AkColors.success
+                            : latency! < 500
+                            ? AkColors.action
+                            : AkColors.danger,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),

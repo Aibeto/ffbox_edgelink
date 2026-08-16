@@ -173,33 +173,29 @@ class _DataRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: SizedBox(
-        height: 20,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              width: ifaceWidth > 0 ? ifaceWidth : null,
-              child: Text(
-                row.iface,
-                style: AkTheme.sans(fontSize: 13, color: AkColors.info),
-                overflow: TextOverflow.ellipsis,
-              ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            width: ifaceWidth > 0 ? ifaceWidth : null,
+            child: Text(
+              row.iface,
+              style: AkTheme.sans(fontSize: 13, color: AkColors.info),
+              overflow: TextOverflow.ellipsis,
             ),
-            Positioned(
-              left: ifaceWidth > 0 ? ifaceWidth + 8 : 0,
-              right: 0,
-              top: 0,
-              child: Text(
-                row.address,
-                style: AkTheme.mono(fontSize: 13, color: AkColors.textPrimary),
-                overflow: TextOverflow.ellipsis,
-              ),
+          ),
+          Positioned(
+            left: ifaceWidth > 0 ? ifaceWidth + 8 : 0,
+            right: 0,
+            top: 0,
+            child: Text(
+              row.address,
+              style: AkTheme.mono(fontSize: 13, color: AkColors.textPrimary),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

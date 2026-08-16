@@ -13,4 +13,7 @@ abstract interface class ServerRepository {
 
   /// 追加一条历史记录（含密码），自动清理超过 7 天的旧记录。
   Future<void> saveToHistory(ServerProfile profile);
+
+  /// 删除一条历史记录（按 baseUrl + username 匹配）。
+  Future<void> deleteFromHistory(ServerProfile profile);
 }

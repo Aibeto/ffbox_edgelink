@@ -13,7 +13,7 @@ import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/marquee_text.dart';
 import 'package:ffbox_edgelink/presentation/widgets/status_badge.dart';
 
-/// 任务详情页：完整展示转码详情，每 1 秒轮询刷新。
+/// 任务详情页：完整展示转码详情，每 500ms 轮询刷新。
 class TaskDetailScreen extends ConsumerStatefulWidget {
   final int taskId;
   final Task? initialTask;
@@ -35,7 +35,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   final Set<TaskOperation> _busyOps = {};
   String? _statusMessage;
 
-  static const _pollInterval = Duration(seconds: 1);
+  static const _pollInterval = Duration(milliseconds: 500);
 
   // --- 初始化与销毁 ---
 
@@ -108,7 +108,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
   }
 
-  /// 手动重试：恢复 1s 轮询并立即刷新。
+  /// 手动重试：恢复 500ms 轮询并立即刷新。
   void _retry() {
     logDebug('taskDetailUI: 手动重试 id=${widget.taskId}');
     _pollTimer?.cancel();

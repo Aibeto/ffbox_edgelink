@@ -30,7 +30,7 @@ class AuthService {
   }) async {
     logDebug('auth.login baseUrl=$baseUrl username=$username');
 
-    // 本机免密登录：UI 传入空凭据，服务端对空用户名/密码返回有效会话，
+    // 匿名登录：UI 传入空凭据，服务端对空用户名/密码返回有效会话，
     // 避免伪造 sessionId 导致后续接口 401。
     final result = await _authRepository.login(
       baseUrl: baseUrl,

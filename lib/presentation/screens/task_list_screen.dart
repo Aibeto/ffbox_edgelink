@@ -11,7 +11,7 @@ import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
 
-/// 任务列表页：1s 轮询刷新、任务操作（启动/暂停/继续/删除）、设备名+延迟显示。
+/// 任务列表页：500ms 轮询刷新、任务操作（启动/暂停/继续/删除）、设备名+延迟显示。
 class TaskListScreen extends ConsumerStatefulWidget {
   const TaskListScreen({super.key});
 
@@ -33,14 +33,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   /// 正在执行操作的任务 ID 集合，防止重复点击导致并发请求。
   final Set<int> _busyTaskIds = {};
 
-  static const _pollInterval = Duration(seconds: 1);
+  static const _pollInterval = Duration(milliseconds: 500);
 
   // --- 初始化与销毁 ---
 
   @override
   void initState() {
     super.initState();
-    logDebug('taskListUI: initState, 启动 1s 轮询');
+    logDebug('taskListUI: initState, 启动 500ms 轮询');
     _refresh();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
   }
@@ -103,7 +103,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     }
   }
 
-  /// 手动重试：恢复 1s 轮询并立即刷新。
+  /// 手动重试：恢复 500ms 轮询并立即刷新。
   void _retry() {
     logDebug('taskListUI: 重试');
     _pollTimer?.cancel();

@@ -69,7 +69,8 @@ class ServerRepositoryImpl implements ServerRepository {
     // 去重：相同 baseUrl + username 的旧记录移除，保留最新
     list = list
         .where(
-          (p) => !(p.baseUrl == profile.baseUrl && p.username == profile.username),
+          (p) =>
+              !(p.baseUrl == profile.baseUrl && p.username == profile.username),
         )
         .toList();
 
@@ -80,6 +81,32 @@ class ServerRepositoryImpl implements ServerRepository {
     final cutoff = DateTime.now().subtract(_kMaxAge);
     list = list.where((p) => p.timestamp.isAfter(cutoff)).toList();
 
-    await prefs.setString(_kHistory, jsonEncode(list.map((p) => p.toJson()).toList()));
+    await prefs.setString(
+      _kHistory,
+      jsonEncode(list.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  @override
+  Future<void> deleteFromHistory(ServerProfile profile) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kHistory);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      List<ServerProfile> list = (jsonDecode(raw) as List)
+          .map((e) => ServerProfile.fromJson(e as Map<String, dynamic>))
+          .toList();
+      list = list
+          .where(
+            (p) =>
+                !(p.baseUrl == profile.baseUrl &&
+                    p.username == profile.username),
+          )
+          .toList();
+      await prefs.setString(
+        _kHistory,
+        jsonEncode(list.map((p) => p.toJson()).toList()),
+      );
+    } catch (_) {}
   }
 }

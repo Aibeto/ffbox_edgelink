@@ -17,7 +17,7 @@ class AppConfig {
 
   // --- 本机检测 ---
 
-  /// 判断当前地址是否为本机（允许免密登录）。
+  /// 判断当前地址是否为本机（允许匿名登录）。
   bool get isLocalhost {
     try {
       final uri = Uri.parse(normalizedBaseUrl);
