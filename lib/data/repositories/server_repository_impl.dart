@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:ffbox_edgelink/core/utils/log.dart';
+import 'package:ffbox_edgelink/core/utils/secret_cipher.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
 import 'package:ffbox_edgelink/domain/repositories/server_repository.dart';
 import 'package:path_provider/path_provider.dart';
@@ -73,9 +74,20 @@ class ServerRepositoryImpl implements ServerRepository {
     final raw = store['history'];
     if (raw == null) return const [];
     try {
-      final list = (raw as List)
-          .map((e) => ServerProfile.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final list = <ServerProfile>[];
+      for (final e in raw as List) {
+        final map = e as Map<String, dynamic>;
+        final p = ServerProfile.fromJson(map);
+        final password = await SecretCipher.decrypt(p.password);
+        list.add(
+          ServerProfile(
+            baseUrl: p.baseUrl,
+            username: p.username,
+            password: password,
+            timestamp: p.timestamp,
+          ),
+        );
+      }
       final cutoff = DateTime.now().subtract(_kMaxAge);
       final filtered = list.where((p) => p.timestamp.isAfter(cutoff)).toList()
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -94,9 +106,20 @@ class ServerRepositoryImpl implements ServerRepository {
     final raw = store['history'];
     if (raw != null) {
       try {
-        list = (raw as List)
-            .map((e) => ServerProfile.fromJson(e as Map<String, dynamic>))
-            .toList();
+        final parsed = <ServerProfile>[];
+        for (final e in raw as List) {
+          final map = e as Map<String, dynamic>;
+          final p = ServerProfile.fromJson(map);
+          parsed.add(
+            ServerProfile(
+              baseUrl: p.baseUrl,
+              username: p.username,
+              password: await SecretCipher.decrypt(p.password),
+              timestamp: p.timestamp,
+            ),
+          );
+        }
+        list = parsed;
       } catch (_) {}
     }
 
@@ -115,7 +138,13 @@ class ServerRepositoryImpl implements ServerRepository {
     final cutoff = DateTime.now().subtract(_kMaxAge);
     list = list.where((p) => p.timestamp.isAfter(cutoff)).toList();
 
-    store['history'] = list.map((p) => p.toJson()).toList();
+    final history = <Map<String, dynamic>>[];
+    for (final p in list) {
+      final json = p.toJson();
+      json['password'] = await SecretCipher.encrypt(p.password);
+      history.add(json);
+    }
+    store['history'] = history;
     await _writeStore(store);
     logDebug('saveToHistory: 保存 ${list.length} 条记录');
   }

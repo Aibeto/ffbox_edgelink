@@ -7,13 +7,60 @@ import 'package:path_provider/path_provider.dart';
 
 /// SessionRepository 的具体实现。
 ///
-/// 使用本地 JSON 文件持久化会话数据（服务器地址+用户名+sessionId），
-/// 登录成功写入，登出清空，启动时恢复以实现免重新登录。
+/// 使用本地 JSON 文件（`session_store.json`）持久化会话数据
+/// （服务器地址+用户名+sessionId），登录成功写入，登出清空，
+/// 启动时恢复以实现免重新登录。
+///
+/// 历史兼容：启动时检测旧文件 `server_store.json`，若存在会话数据
+/// 则自动迁移到 `session_store.json`，迁移后不再读写旧文件。
 class SessionRepositoryImpl implements SessionRepository {
+  static bool _migrated = false;
+
   Future<File> _storeFile() async {
     final dir = await getApplicationSupportDirectory();
-    return File('${dir.path}/server_store.json');
+    return File('${dir.path}/session_store.json');
   }
+
+  // --- 旧文件迁移 ---
+
+  Future<void> _migrateFromOldStore() async {
+    if (_migrated) return;
+    final file = await _storeFile();
+    if (await file.exists()) {
+      _migrated = true;
+      return;
+    }
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final oldFile = File('${dir.path}/server_store.json');
+      if (!await oldFile.exists()) {
+        _migrated = true;
+        return;
+      }
+      final raw = await oldFile.readAsString();
+      if (raw.isEmpty) {
+        _migrated = true;
+        return;
+      }
+      final store = jsonDecode(raw) as Map<String, dynamic>;
+      if (store.containsKey('session_baseUrl')) {
+        await file.parent.create(recursive: true);
+        await file.writeAsString(
+          jsonEncode({
+            'session_baseUrl': store['session_baseUrl'],
+            'session_username': store['session_username'],
+            'session_sessionId': store['session_sessionId'],
+          }),
+        );
+        logDebug('sessionStore: 从 server_store.json 迁移会话数据');
+      }
+    } catch (e) {
+      logDebug('sessionStore: 迁移失败 $e');
+    }
+    _migrated = true;
+  }
+
+  // --- 文件读写 ---
 
   Future<Map<String, dynamic>> _readStore() async {
     try {
@@ -40,6 +87,7 @@ class SessionRepositoryImpl implements SessionRepository {
 
   @override
   Future<Session?> load() async {
+    await _migrateFromOldStore();
     final store = await _readStore();
     final baseUrl = store['session_baseUrl'] as String?;
     final sessionId = store['session_sessionId'] as String?;

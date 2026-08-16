@@ -7,7 +7,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - **禁止自动 Git 提交/分支操作**，全部由用户手动完成。
 - 每轮结束检查本文是否需更新：只记录长期有效的架构决策、命名约定、技术选型、边界约束，不记一次性细节。
 - 包名 `ffbox_edgelink`；Android/iOS ID `top.raincrat.aibeto.ffboxedgelink`；显示名 `FFBox EdgeLink`。
-- 技术栈：flutter_riverpod（状态/DI）、dio（网络）、crypto（SHA256）、本地 JSON 文件存储（`server_store.json`，路径经 path_provider 的 `getApplicationSupportDirectory`，不用 SharedPreferences）、archive + file_saver（日志导出 zip）。
+- 技术栈：flutter_riverpod（状态/DI）、dio（网络）、crypto（SHA256）、encrypt（AES-256-CBC 密码加密）、本地 JSON 文件存储（`server_store.json` + `session_store.json`，路径经 path_provider 的 `getApplicationSupportDirectory`，不用 SharedPreferences）、archive + file_saver（日志导出 zip）。
 - 架构：domain / application / data / presentation 分层，domain 与 application 为纯 Dart，不依赖 Riverpod/Bloc。
 - 后端 API 文档 `http://127.0.0.1:5500/docs/swagger.html`；参考实现 `../FFBox`。
 
@@ -18,7 +18,8 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 
 ## 数据与接口约定
 
-- 服务器地址/用户名/sessionId 持久化到 `server_store.json`（Windows 下位于 `%APPDATA%\top.raincrat.aibeto\FFBox EdgeLink\`）；登录页回填最近记录，RECENT 列表显示 7 天内历史。
+- 服务器配置持久化到 `server_store.json`（回填+历史），会话信息（sessionId）持久化到 `session_store.json`（免重新登录）；Windows 下位于 `%APPDATA%\top.raincrat.aibeto\FFBox EdgeLink\`；登录页回填最近记录，RECENT 列表显示 7 天内历史。旧版共用 `server_store.json` 的会话数据在首次启动时自动迁移到 `session_store.json`。
+- 历史记录中的密码加密存储：Android 首次保存密码时在应用私有目录（`/data/data/<package>/files`）生成随机密钥文件 `secret.key`（32 字节 base64），用 AES-256-CBC 加密（密文带 `enc:` 前缀）；其余平台回退明文保存。加解密统一经 `SecretCipher`（`lib/core/utils/secret_cipher.dart`）。
 - `GET /api/v1/tasks` 为区段接口：`offset`（0-based）、`size`（默认100）、`idOnly`（默认false）；响应 `{taskIds|tasks, totalCount}`，客户端传 `idOnly=true` 取 `taskIds`。
 - 任务操作均为批量接口（`/start`、`/pause`、`/resume`、`/delete`、`/ready`、`/reset`），请求体 `{ids: [...]}`。
 - Task 结构：`{id, taskName, before: InputInfo[], status, runs: Run[]}`；`elapsed/errorInfo/outputFiles` 在 Run 上，不在 Task 顶层。
