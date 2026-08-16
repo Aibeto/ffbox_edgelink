@@ -143,10 +143,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    // 检测 sha256: 前缀：历史记录自动填入时已是哈希值，直接发送到服务器，
+    // 避免 AuthService 再做一次 SHA256 导致双重哈希。
+    final isHashed = password.startsWith('sha256:');
+    final directPasskey = isHashed
+        ? password.substring('sha256:'.length)
+        : null;
+    final plainPassword = isHashed ? '' : password;
+
     try {
       final outcome = await ref
           .read(authServiceProvider)
-          .login(baseUrl: baseUrl, username: username, password: password);
+          .login(
+            baseUrl: baseUrl,
+            username: username,
+            password: plainPassword,
+            directPasskey: directPasskey,
+          );
 
       if (!mounted) return;
 
@@ -163,16 +176,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(serverRepositoryProvider)
           .save(ServerProfile(baseUrl: baseUrl, username: username));
-      await ref
-          .read(serverRepositoryProvider)
-          .saveToHistory(
-            ServerProfile(
-              baseUrl: baseUrl,
-              username: username,
-              password: password,
-              timestamp: DateTime.now(),
-            ),
-          );
+      // 仅手动输入密码时保存历史；从历史自动填入时密码已是 sha256:hex，跳过。
+      if (!isHashed) {
+        await ref
+            .read(serverRepositoryProvider)
+            .saveToHistory(
+              ServerProfile(
+                baseUrl: baseUrl,
+                username: username,
+                password: password,
+                timestamp: DateTime.now(),
+              ),
+            );
+      }
       await ref.read(sessionRepositoryProvider).save(session);
       logDebug('loginUI: 登录成功，保存会话并切换到任务列表');
       ref.read(sessionProvider.notifier).update(session);
