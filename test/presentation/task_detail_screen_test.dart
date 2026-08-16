@@ -92,6 +92,42 @@ class _FakeTaskRepo implements TaskRepository {
   Future<void> resetTasks(List<int> ids) async {}
 }
 
+class _ErrorTaskRepo implements TaskRepository {
+  @override
+  Future<List<int>> listTaskIds({
+    int offset = 0,
+    int size = 100,
+    bool silent = false,
+  }) async => const [0];
+
+  @override
+  Future<Task> getTask(int id, {bool silent = false}) async => Task(
+    id: id,
+    taskName: 'err-task',
+    status: TaskStatus.error,
+    elapsedSeconds: 50,
+    errorInfo: const [],
+    inputs: const [TaskInputInfo(filePath: 'in.flv', duration: 100)],
+    runs: const [
+      TaskRunInfo(status: 'idle'),
+      TaskRunInfo(status: 'error', elapsed: 50, errorInfo: []),
+    ],
+  );
+
+  @override
+  Future<void> deleteTasks(List<int> ids) async {}
+  @override
+  Future<void> startTasks(List<int> ids) async {}
+  @override
+  Future<void> readyTasks(List<int> ids) async {}
+  @override
+  Future<void> pauseTasks(List<int> ids) async {}
+  @override
+  Future<void> resumeTasks(List<int> ids) async {}
+  @override
+  Future<void> resetTasks(List<int> ids) async {}
+}
+
 Widget _buildApp(_FakeTaskRepo repo) {
   return ProviderScope(
     overrides: [
@@ -134,6 +170,30 @@ void main() {
     // 遥测曲线与日志
     expect(find.text('转码遥测'), findsOneWidget);
     expect(find.text('转码日志'), findsOneWidget);
+  });
+
+  testWidgets('error task with empty errorInfo still shows error card', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final repo = _ErrorTaskRepo();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          taskRepositoryProvider.overrideWith((ref) => repo),
+          taskServiceProvider.overrideWith((ref) => TaskService(repo)),
+        ],
+        child: const MaterialApp(home: TaskDetailScreen(taskId: 0)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('历史错误'), findsOneWidget);
+    expect(find.text('任务失败，请查看转码日志'), findsOneWidget);
   });
 
   testWidgets('polls task detail every second', (tester) async {

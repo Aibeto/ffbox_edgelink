@@ -22,7 +22,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - `GET /api/v1/tasks` 为区段接口：`offset`（0-based）、`size`（默认100）、`idOnly`（默认false）；响应 `{taskIds|tasks, totalCount}`，客户端传 `idOnly=true` 取 `taskIds`。
 - 任务操作均为批量接口（`/start`、`/pause`、`/resume`、`/delete`、`/ready`、`/reset`），请求体 `{ids: [...]}`。
 - Task 结构：`{id, taskName, before: InputInfo[], status, runs: Run[]}`；`elapsed/errorInfo/outputFiles` 在 Run 上，不在 Task 顶层。
-- 客户端取「当前 run」必须与后端 `getCurrentRun` 语义一致：runs 数组只追加（reset 追加新 run），从**后往前**取第一条活跃态（running/paused/paused_queued/stopping/finishing/**error**）run，无则回退最新一条；禁止从前向后取第一个非 idle 的 run，否则会命中历史出错/完成的旧 run 导致状态停滞。活跃态**包含 error**：修正 error 任务后 reset 追加新 idle run，若回退到 idle run 会丢失错误信息，须保留旧 error run 直到新 run 真正运行（running 等）才被覆盖。错误信息展示（错误卡片）须按 `task.status == error` 门控，不只看 errorInfo 是否存在（reset 后 errorInfo 仍在 activeRun 上，但任务状态已非 error）。
+- 客户端取「当前 run」必须与后端 `getCurrentRun` 语义一致：runs 数组只追加（reset 追加新 run），从**后往前**取第一条活跃态（running/paused/paused_queued/stopping/finishing/**error**）run，无则回退最新一条；禁止从前向后取第一个非 idle 的 run，否则会命中历史出错/完成的旧 run 导致状态停滞。活跃态**包含 error**：修正 error 任务后 reset 追加新 idle run，若回退到 idle run 会丢失错误信息，须保留旧 error run 直到新 run 真正运行（running 等）才被覆盖。错误信息展示：详情页 `errorInfo` 非空即显示错误卡片（标题按 `task.status == error` 区分「错误信息」/「任务历史报错」）；列表页仍按 `task.status == error` 门控。
 - 写操作「查询确认」优先于盲目重试：超时后重查状态确认结果，返回三态（成功/失败/未知）。
 - 网络：连接/发送/接收超时 + 幂等 GET 有限重试；错误统一经 `ApiException` 分类给友好文案，容忍单通与丢包。
 
@@ -37,10 +37,11 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 ## 开发约定
 
 - 调试日志走 `kDebugMode` 门控的 `logDebug`（`lib/core/utils/log.dart`），ISO8601 时间戳格式 `[FFBox EdgeLink] <时间> <消息>`。
-- 文件日志 `FileLogger`（`lib/core/utils/file_logger.dart`）：Windows 写 exe 同目录 `logs/`，Android 写缓存目录 `logs/`，其余写文档目录 `logs/`；普通日志 `app_{ts}.log`（同时输出控制台），原始数据 `raw_data_{ts}.log`（仅写文件）；测试环境写内存缓冲（上限 500 条，超出丢弃最旧）；文件写入经队列串行化；启动时清理，仅保留最新 5 套（同时间戳为一套）。
+- 文件日志 `FileLogger`（`lib/core/utils/file_logger.dart`）：Windows 写 exe 同目录 `logs/`，Android 写缓存目录 `logs/`，其余写文档目录 `logs/`；普通日志 `app_{ts}.log`（同时输出控制台），原始数据 `raw_data_{ts}.log`（仅写文件）；测试环境写内存缓冲（上限 500 条，超出丢弃最旧）；文件写入经队列串行化；启动时清理，仅保留最新 3 套（同时间戳为一套）。
 - 默认 `flutter run -d windows` 本机调试；Android 由人工真机/模拟器验证。
 - 任务列表 1s 轮询（防重入、避免闪屏），设备名旁显示网络延迟（复用 listTaskIds 耗时，颜色分级）。
 - 任务详情页 `TaskDetailScreen`：`GET /api/v1/tasks/{id}` 1s 轮询（防重入、保留旧数据），展示输入媒体、输出配置、遥测曲线（progressLog）、输出文件、转码日志。
+- 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。
 - 长标题用 `MarqueeText`（`lib/presentation/widgets/marquee_text.dart`）循环滚动，不引入外部包。
 
 ## 实施方案

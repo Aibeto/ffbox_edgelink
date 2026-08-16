@@ -102,7 +102,7 @@ class FileLogger {
       await log('平台: ${Platform.operatingSystem}');
       await log('应用目录: ${appDir.path}');
       await log('日志文件: ${_logFile!.path}');
-      await log('原始数据文件: ${_rawDataFile!.path}');
+      await log('原始信息: ${_rawDataFile!.path}');
     } catch (e) {
       // ignore: avoid_print
       print('[FFBox EdgeLink] 文件日志初始化失败: $e');
@@ -291,7 +291,7 @@ class FileLogger {
   // --- 旧日志清理 ---
 
   /// 清理旧日志文件，仅保留最新 [keep] 套（每套 = 同时间戳的 app 日志与原始数据日志）。
-  Future<void> cleanOldLogs({int keep = 5}) async {
+  Future<void> cleanOldLogs({int keep = 3}) async {
     try {
       if (_logDir == null || !await _logDir!.exists()) return;
 

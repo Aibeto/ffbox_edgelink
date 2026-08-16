@@ -88,13 +88,32 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         'taskDetailUI: refresh error kind=${e.kind} ${e.friendlyMessage}',
       );
       setState(() => _error = e.friendlyMessage);
+      _stopPolling();
     } catch (e) {
       if (!mounted) return;
       logDebug('taskDetailUI: refresh error $e');
       setState(() => _error = '$e');
+      _stopPolling();
     } finally {
       _refreshing = false;
     }
+  }
+
+  /// 连接丢失后停止自动轮询，等待用户手动重试，避免无效请求每秒重发。
+  void _stopPolling() {
+    if (_pollTimer != null) {
+      logDebug('taskDetailUI: 连接丢失');
+      _pollTimer?.cancel();
+      _pollTimer = null;
+    }
+  }
+
+  /// 手动重试：恢复 1s 轮询并立即刷新。
+  void _retry() {
+    logDebug('taskDetailUI: 手动重试 id=${widget.taskId}');
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
+    _refresh();
   }
 
   // --- 登出 ---
@@ -211,27 +230,79 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     return Scaffold(
       appBar: _buildAppBar(task),
       body: task == null
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: AkColors.info,
-                strokeWidth: 2,
-              ),
-            )
+          ? (_error != null
+                ? _buildInitialError()
+                : const Center(
+                    child: CircularProgressIndicator(
+                      color: AkColors.info,
+                      strokeWidth: 2,
+                    ),
+                  ))
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
-                if (_error != null) _ErrorBanner(message: _error!),
+                if (_error != null)
+                  _ErrorBanner(message: _error!, onRetry: _retry),
                 _buildHeader(task),
                 _buildInputCard(task),
                 _buildOutputConfigCard(task),
                 _buildProgressCard(task),
                 _buildOutputFilesCard(task),
-                if (task.status == TaskStatus.error &&
+                // 任务处于 error 状态时强制显示错误卡片（即使 errorInfo 为空），
+                // 或展示 reset 后保留的历史报错（error 活跃态，见 AGENTS.md）
+                if (task.status == TaskStatus.error ||
                     task.errorInfo.isNotEmpty)
                   _buildErrorCard(task),
                 _buildLogCard(task),
               ],
             ),
+    );
+  }
+
+  /// 首次加载失败（_task 为 null）时显示的居中错误视图。
+  Widget _buildInitialError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: AkColors.danger, size: 40),
+          const SizedBox(height: 12),
+          Text(
+            '加载失败',
+            style: AkTheme.sans(
+              fontSize: 16,
+              color: AkColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$_error',
+            style: AkTheme.sans(fontSize: 12, color: AkColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: _retry,
+            icon: const Icon(Icons.refresh, size: 16, color: AkColors.info),
+            label: Text(
+              '重试',
+              style: AkTheme.sans(
+                fontSize: 13,
+                color: AkColors.info,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              backgroundColor: AkColors.info.withValues(alpha: 0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AkTheme.cutSm),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -555,7 +626,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         task.inputs.isNotEmpty && _isImageDemuxer(task.inputs.first.demuxer);
 
     return _SectionCard(
-      title: '转码输出配置',
+      title: '输出配置',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -734,13 +805,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   // -------------------------------------------------------------------------
 
   Widget _buildErrorCard(Task task) {
+    // 任务当前处于 error 状态为当前报错，否则为 reset 后保留的历史报错
+    final isCurrentError = task.status == TaskStatus.error;
+    final errors = task.errorInfo.isEmpty
+        ? const ['任务失败，请查看转码日志']
+        : task.errorInfo;
     return _SectionCard(
-      title: '错误信息',
+      title: isCurrentError ? '错误信息' : '历史报错',
       borderColor: AkColors.danger,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final err in task.errorInfo)
+          for (final err in errors)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
@@ -1006,8 +1082,9 @@ class _LegendDot extends StatelessWidget {
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
+  final VoidCallback? onRetry;
 
-  const _ErrorBanner({required this.message});
+  const _ErrorBanner({required this.message, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1030,6 +1107,33 @@ class _ErrorBanner extends StatelessWidget {
               style: AkTheme.sans(fontSize: 12, color: AkColors.danger),
             ),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 14, color: AkColors.info),
+              label: Text(
+                '重试',
+                style: AkTheme.sans(
+                  fontSize: 12,
+                  color: AkColors.info,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                backgroundColor: AkColors.info.withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

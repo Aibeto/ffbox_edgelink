@@ -130,7 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() {
         _loading = false;
         _error = e.kind == ApiErrorKind.timeout
-            ? '连接超时，无法确认是否登录成功，请重试'
+            ? '连接超时'
             : e.friendlyMessage;
       });
     } catch (e) {

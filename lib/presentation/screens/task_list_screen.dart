@@ -83,13 +83,32 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         'taskListUI: refresh error ApiException kind=${e.kind} ${e.friendlyMessage}',
       );
       setState(() => _tasks = AsyncValue.error(e, StackTrace.current));
+      _stopPolling();
     } catch (e) {
       if (!mounted) return;
       logDebug('taskListUI: refresh error $e');
       setState(() => _tasks = AsyncValue.error(e, StackTrace.current));
+      _stopPolling();
     } finally {
       _refreshing = false;
     }
+  }
+
+  /// 连接丢失后停止自动轮询，等待用户手动重试，避免错误/加载中每秒交替闪烁。
+  void _stopPolling() {
+    if (_pollTimer != null) {
+      logDebug('taskListUI: 连接丢失');
+      _pollTimer?.cancel();
+      _pollTimer = null;
+    }
+  }
+
+  /// 手动重试：恢复 1s 轮询并立即刷新。
+  void _retry() {
+    logDebug('taskListUI: 重试');
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
+    _refresh();
   }
 
   Future<void> _logout() async {
@@ -278,6 +297,33 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         color: AkColors.textSecondary,
                       ),
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _retry,
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 16,
+                        color: AkColors.info,
+                      ),
+                      label: Text(
+                        '重试',
+                        style: AkTheme.sans(
+                          fontSize: 13,
+                          color: AkColors.info,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        backgroundColor: AkColors.info.withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                        ),
+                      ),
                     ),
                   ],
                 ),
