@@ -136,6 +136,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
     setState(() => _statusMessage = outcome.message);
     await _refresh();
+    // 兜底：refresh 失败时清除过期操作提示，避免与错误横幅同时显示
+    if (!mounted) return;
+    if (_statusMessage == outcome.message) {
+      setState(() => _statusMessage = null);
+    }
   }
 
   String _verb(TaskOperation op) => switch (op) {
@@ -542,7 +547,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   Widget _buildOutputConfigCard(Task task) {
     final run = task.activeRun;
-    if (run == null || run.vcodec.isEmpty && run.muxFormat.isEmpty) {
+    if (run == null || (run.vcodec.isEmpty && run.muxFormat.isEmpty)) {
       return const SizedBox.shrink();
     }
     final hasCmd = run.paraArray.isNotEmpty;

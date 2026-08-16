@@ -158,6 +158,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     );
     setState(() => _statusMessage = outcome.message);
     await _refresh();
+    // 兜底：refresh 失败时清除过期操作提示，避免与错误横幅同时显示
+    if (!mounted) return;
+    if (_statusMessage == outcome.message) {
+      setState(() {
+        _statusMessage = null;
+        _statusTaskId = null;
+      });
+    }
   }
 
   // --- 辅助方法 ---

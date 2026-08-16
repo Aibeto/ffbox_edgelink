@@ -272,16 +272,20 @@ class Task {
   }
 
   /// 活跃运行态集合（与后端 getCurrentRun 判定一致）。
+  /// 包含 `error`：修正 error 任务后 reset 会追加新 idle run，
+  /// 若此时回退到 idle run 会丢失进度/配置/错误信息；
+  /// 保留 error run 直到新 run 真正运行（running 等）才被覆盖。
   static const Set<String> _activeRunStatuses = {
     'running',
     'paused',
     'paused_queued',
     'stopping',
     'finishing',
+    'error',
   };
 
   /// 当前转码 run。runs[0] 是媒体信息 run，真实转码数据在后续 run 上；
-  /// 从后往前取最新一条活跃态 run（避免命中历史出错/完成的旧 run），
+  /// 从后往前取最新一条活跃态 run（含 error，避免修正后丢错误信息），
   /// 全部非活跃时回退到最新一条。
   TaskRunInfo? get activeRun {
     for (final run in runs.reversed) {
@@ -307,19 +311,25 @@ class Task {
       id = (json['id'] as num?)?.toInt() ?? 0;
       taskName = json['taskName'] as String? ?? '';
       status = _parseStatus(json['status']);
-    } catch (_) {}
+    } catch (e) {
+      _debugLog('Task.fromJson 解析基础字段失败: $e');
+    }
 
     // before / runs 完整解析
     try {
       inputs = (json['before'] as List<dynamic>? ?? const [])
           .map(TaskInputInfo.fromJson)
           .toList();
-    } catch (_) {}
+    } catch (e) {
+      _debugLog('Task.fromJson 解析输入媒体失败: $e');
+    }
     try {
       runs = (json['runs'] as List<dynamic>? ?? const [])
           .map(TaskRunInfo.fromJson)
           .toList();
-    } catch (_) {}
+    } catch (e) {
+      _debugLog('Task.fromJson 解析 runs 失败: $e');
+    }
 
     // 顶层摘要：优先取活跃 run 的数据（runs[0] 通常是媒体信息 run）。
     final activeRun = _pickActiveRun(
@@ -430,4 +440,13 @@ class Task {
     }
     return '$m:${sec.toString().padLeft(2, '0')}';
   }
+}
+
+/// 解析容错日志：assert 仅在 debug 模式求值，domain 层保持纯 Dart 不引入 Flutter 依赖。
+void _debugLog(String message) {
+  assert(() {
+    // ignore: avoid_print
+    print('[FFBox EdgeLink] $message');
+    return true;
+  }());
 }

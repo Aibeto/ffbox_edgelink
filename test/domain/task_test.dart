@@ -82,7 +82,9 @@ void main() {
       expect(task.outputFiles, ['new.mp4']);
     });
 
-    test('idle after reset ignores old run error info', () {
+    test('idle after reset keeps error info until rerun starts', () {
+      // 修正 error 任务后 reset 追加新 idle run；此时回退到 idle run 会丢失
+      // 错误信息，因此 activeRun 应保留旧 error run，直到新 run 真正运行
       final task = Task.fromJson({
         'taskName': 'x',
         'status': 'idle',
@@ -97,8 +99,36 @@ void main() {
           {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
         ],
       });
+      expect(task.errorInfo, ['旧错误']);
+      expect(task.elapsedSeconds, 50);
+      expect(task.activeRun?.status, 'error');
+    });
+
+    test('activeRun returns the latest running run after rerun', () {
+      // error 修正后重新运行：新 running run 从后往前最先命中，覆盖旧 error run
+      final task = Task.fromJson({
+        'taskName': 'x',
+        'status': 'running',
+        'runs': [
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'error',
+            'elapsed': 50,
+            'errorInfo': ['旧错误'],
+            'outputFiles': ['old.mp4'],
+          },
+          {'status': 'idle', 'elapsed': 0, 'errorInfo': [], 'outputFiles': []},
+          {
+            'status': 'running',
+            'elapsed': 5,
+            'errorInfo': [],
+            'outputFiles': ['new.mp4'],
+          },
+        ],
+      });
+      expect(task.elapsedSeconds, 5);
       expect(task.errorInfo, isEmpty);
-      expect(task.elapsedSeconds, 0);
+      expect(task.outputFiles, ['new.mp4']);
     });
 
     test('activeRun returns the latest running run', () {

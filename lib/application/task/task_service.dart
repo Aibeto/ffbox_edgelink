@@ -225,7 +225,9 @@ class TaskService {
     TaskOperation.pause => status == TaskStatus.paused,
     TaskOperation.resume => status == TaskStatus.running,
     TaskOperation.ready =>
-      status == TaskStatus.idleQueued || status == TaskStatus.pausedQueued,
+      status == TaskStatus.idleQueued ||
+      status == TaskStatus.pausedQueued ||
+      status == TaskStatus.running, // ready 后被调度器立即执行也视为生效
     TaskOperation.reset => status == TaskStatus.idle,
     TaskOperation.delete => false,
     _ => true,

@@ -85,6 +85,11 @@ class ApiClient {
           statusCode: e.response?.statusCode,
           kind: kind,
         );
+      } catch (e) {
+        // 非 Dio 异常（如 response.data as T 强转 TypeError、日志写入失败）统一包装，
+        // 避免穿透到只捕获 ApiException 的调用方形成未处理异常
+        logDebug('$method $path -> 非网络异常: $e');
+        throw ApiException(e.toString(), kind: ApiErrorKind.unknown);
       }
     }
   }

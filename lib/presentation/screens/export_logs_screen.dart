@@ -105,14 +105,12 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
         _showProgress = true;
         _compressProgress = 0;
       });
-      final zipBytes = await Future(
-        () => _service.compressToZip(
-          files,
-          logDir,
-          onProgress: (p) {
-            if (mounted) setState(() => _compressProgress = p);
-          },
-        ),
+      final zipBytes = await _service.compressToZip(
+        files,
+        logDir,
+        onProgress: (p) {
+          if (mounted) setState(() => _compressProgress = p);
+        },
       );
       await fileLogger.log(
         'exportLogs: 压缩完成，${files.length} 个文件共 ${zipBytes.length} 字节',
@@ -175,90 +173,95 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '导出日志',
-          style: AkTheme.sans(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AkColors.textPrimary,
+    return PopScope(
+      // 导出流程进行中时阻止系统返回，避免误操作中断
+      canPop: _done,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            '导出日志',
+            style: AkTheme.sans(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AkColors.textPrimary,
+            ),
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+            // 导出流程进行中禁用返回，图标用禁用色给出直观反馈
+            color: _done ? AkColors.textSecondary : AkColors.disabled,
+            onPressed: _done ? () => Navigator.of(context).pop() : null,
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          color: AkColors.textSecondary,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 状态图标
-              Icon(
-                _done
-                    ? (_error != null
-                          ? Icons.error_outline
-                          : Icons.check_circle_outline)
-                    : Icons.hourglass_top,
-                size: 48,
-                color: _done
-                    ? (_error != null ? AkColors.danger : AkColors.success)
-                    : AkColors.info,
-              ),
-              const SizedBox(height: 24),
-
-              // 状态文字
-              Text(
-                _statusText,
-                style: AkTheme.sans(
-                  fontSize: 14,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 状态图标
+                Icon(
+                  _done
+                      ? (_error != null
+                            ? Icons.error_outline
+                            : Icons.check_circle_outline)
+                      : Icons.hourglass_top,
+                  size: 48,
                   color: _done
                       ? (_error != null ? AkColors.danger : AkColors.success)
-                      : AkColors.textSecondary,
+                      : AkColors.info,
                 ),
-                textAlign: TextAlign.center,
-              ),
-
-              // 进度条（仅压缩阶段）
-              if (_showProgress) ...[
                 const SizedBox(height: 24),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                  child: LinearProgressIndicator(
-                    value: _compressProgress,
-                    minHeight: 6,
-                    backgroundColor: AkColors.muted,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AkColors.info,
+
+                // 状态文字
+                Text(
+                  _statusText,
+                  style: AkTheme.sans(
+                    fontSize: 14,
+                    color: _done
+                        ? (_error != null ? AkColors.danger : AkColors.success)
+                        : AkColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                // 进度条（仅压缩阶段）
+                if (_showProgress) ...[
+                  const SizedBox(height: 24),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                    child: LinearProgressIndicator(
+                      value: _compressProgress,
+                      minHeight: 6,
+                      backgroundColor: AkColors.muted,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AkColors.info,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${(_compressProgress * 100).toInt()}%',
-                  style: AkTheme.sans(
-                    fontSize: 12,
-                    color: AkColors.textSecondary,
+                  const SizedBox(height: 8),
+                  Text(
+                    '${(_compressProgress * 100).toInt()}%',
+                    style: AkTheme.sans(
+                      fontSize: 12,
+                      color: AkColors.textSecondary,
+                    ),
                   ),
-                ),
-              ],
+                ],
 
-              // 返回按钮（仅完成/失败时）
-              if (_done && _error != null) ...[
-                const SizedBox(height: 32),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    '返回',
-                    style: AkTheme.sans(fontSize: 14, color: AkColors.info),
+                // 返回按钮（仅完成/失败时）
+                if (_done && _error != null) ...[
+                  const SizedBox(height: 32),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      '返回',
+                      style: AkTheme.sans(fontSize: 14, color: AkColors.info),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

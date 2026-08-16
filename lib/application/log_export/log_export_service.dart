@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -65,23 +66,25 @@ class LogExportService {
 
   /// 将文件列表压缩为 zip，返回字节数组。
   ///
-  /// [onProgress] 在压缩每个文件后回调，用于更新进度。
-  Uint8List compressToZip(
+  /// 文件读取走异步 IO，level 9 压缩放入后台 isolate，均不阻塞主 isolate。
+  /// [onProgress] 在每个文件读取完成后回调，用于更新进度。
+  Future<Uint8List> compressToZip(
     List<File> files,
     Directory logDir, {
     void Function(double progress)? onProgress,
-  }) {
+  }) async {
     final archive = Archive();
     for (var i = 0; i < files.length; i++) {
       final file = files[i];
       // 相对于 logs 目录的路径
       final relativePath = file.path.substring(logDir.path.length + 1);
-      final bytes = file.readAsBytesSync();
+      final bytes = await file.readAsBytes();
       archive.addFile(ArchiveFile(relativePath, bytes.length, bytes));
       onProgress?.call((i + 1) / files.length);
     }
-    final encoded = ZipEncoder().encode(archive, level: 9);
-    return Uint8List.fromList(encoded);
+    return Isolate.run(
+      () => Uint8List.fromList(ZipEncoder().encode(archive, level: 9)),
+    );
   }
 
   /// 生成压缩文件名：YYYYMMDD_HHMMSS_logs.zip

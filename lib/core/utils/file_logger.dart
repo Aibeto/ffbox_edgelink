@@ -23,6 +23,17 @@ class FileLogger {
   final List<String> _logBuffer = [];
   final List<String> _rawDataBuffer = [];
 
+  /// 内存缓冲区容量上限：1s 轮询场景下防止长期运行内存无限增长
+  static const int _maxBufferSize = 500;
+
+  /// 追加到内存缓冲区，超出上限时丢弃最旧条目。
+  void _appendBuffer(List<String> buffer, String entry) {
+    buffer.add(entry);
+    if (buffer.length > _maxBufferSize) {
+      buffer.removeRange(0, buffer.length - _maxBufferSize);
+    }
+  }
+
   /// 获取单例实例。
   factory FileLogger() {
     _instance ??= FileLogger._();
@@ -106,7 +117,7 @@ class FileLogger {
   Future<void> logToFileOnly(String message) async {
     final timestamp = _formatTimestamp(DateTime.now());
     final logEntry = '[$timestamp] $message';
-    _logBuffer.add(logEntry);
+    _appendBuffer(_logBuffer, logEntry);
     await _writeToFile(_logFile, logEntry);
   }
 
@@ -121,7 +132,7 @@ class FileLogger {
     final logEntry = '[$timestamp] $message';
 
     // 写入内存缓冲区
-    _logBuffer.add(logEntry);
+    _appendBuffer(_logBuffer, logEntry);
 
     // 写入文件（如果已初始化）
     await _writeToFile(_logFile, logEntry);
@@ -137,7 +148,7 @@ class FileLogger {
     required String method,
     required dynamic responseData,
     int? statusCode,
-    Map<String, dynamic>? headers,
+    Map<String, List<String>>? headers,
   }) async {
     final buffer = StringBuffer();
     buffer.writeln('=== 原始响应数据 ===');
@@ -158,7 +169,7 @@ class FileLogger {
     final content = buffer.toString();
 
     // 写入内存缓冲区
-    _rawDataBuffer.add(content);
+    _appendBuffer(_rawDataBuffer, content);
 
     // 写入文件（如果已初始化）
     await _writeToFile(_rawDataFile, content);
@@ -191,7 +202,7 @@ class FileLogger {
     }
 
     // 写入内存缓冲区
-    _logBuffer.add(content);
+    _appendBuffer(_logBuffer, content);
 
     // 写入文件（如果已初始化）
     await _writeToFile(_logFile, content);
@@ -217,7 +228,7 @@ class FileLogger {
     final content = buffer.toString();
 
     // 写入内存缓冲区
-    _rawDataBuffer.add(content);
+    _appendBuffer(_rawDataBuffer, content);
 
     // 写入文件（如果已初始化）
     await _writeToFile(_rawDataFile, content);
@@ -225,10 +236,17 @@ class FileLogger {
 
   // --- 文件操作 ---
 
-  /// 写入文件（追加模式）。
-  Future<void> _writeToFile(File? file, String content) async {
-    if (file == null) return;
+  /// 写入队列：串行化所有文件写入，消除高频追加下的并发交叉与 await 竞态。
+  Future<void> _pendingWrites = Future.value();
 
+  /// 将 [content] 排队写入 [file]（追加模式），返回排队写入完成的 Future。
+  Future<void> _writeToFile(File? file, String content) {
+    if (file == null) return Future.value();
+    _pendingWrites = _pendingWrites.then((_) => _doWrite(file, content));
+    return _pendingWrites;
+  }
+
+  Future<void> _doWrite(File file, String content) async {
     try {
       if (!await file.exists()) {
         await file.create(recursive: true);
@@ -303,7 +321,10 @@ class FileLogger {
         }
       }
     } catch (e) {
-      // ignore
+      if (kDebugMode) {
+        // ignore: avoid_print
+        print('[FFBox EdgeLink] 清理旧日志失败: $e');
+      }
     }
   }
 
