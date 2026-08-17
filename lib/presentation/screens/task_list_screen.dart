@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
+import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
@@ -40,6 +41,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   @override
   void initState() {
     super.initState();
+    ClarityAnalytics.trackScreen('task_list');
     logDebug('taskListUI: initState, 启动 500ms 轮询');
     _refresh();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
@@ -107,6 +109,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   /// 手动重试：恢复 500ms 轮询并立即刷新。
   void _retry() {
     logDebug('taskListUI: 重试');
+    ClarityAnalytics.trackEvent('connection_retry');
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(_pollInterval, (_) => _refresh());
     _refresh();
@@ -125,6 +128,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   Future<void> _logout() async {
     logDebug('taskListUI: 用户登出');
+    ClarityAnalytics.trackEvent('logout');
     await ref.read(sessionRepositoryProvider).clear();
     // 清空会话后由 FFBoxApp 根路由自动切回登录页。不要手动 push 登录页，
     // 否则会替换掉根路由，导致重新登录后仍停留在登录页无法刷新。
@@ -177,6 +181,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
     _busyTaskIds.remove(task.id);
     if (!mounted) return;
+
+    // Clarity 埋点：任务操作三态（success/failed/unconfirmed）
+    ClarityAnalytics.trackEvent('task_${op.name}_${outcome.status.name}');
 
     if (outcome.unauthorized) {
       logDebug('taskListUI: 操作 id=${task.id} op=$op -> unauthorized, 登出');

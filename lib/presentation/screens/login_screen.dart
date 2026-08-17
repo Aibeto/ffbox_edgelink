@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
+import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
+import 'package:ffbox_edgelink/core/utils/hash.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/screens/device_info_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
@@ -37,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    ClarityAnalytics.trackScreen('login');
     _loadProfile();
     _loadHistory();
     _latencyTimer = Timer.periodic(
@@ -143,15 +146,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    // 检测 sha256: 前缀：历史记录自动填入时已是哈希值，直接发送到服务器，
+    // 避免 AuthService 再做一次 SHA256 导致双重哈希。
+    final isHashed = password.startsWith('sha256:');
+    final directPasskey = isHashed
+        ? password.substring('sha256:'.length)
+        : null;
+    final plainPassword = isHashed ? '' : password;
+
     try {
       final outcome = await ref
           .read(authServiceProvider)
-          .login(baseUrl: baseUrl, username: username, password: password);
+          .login(
+            baseUrl: baseUrl,
+            username: username,
+            password: plainPassword,
+            directPasskey: directPasskey,
+          );
 
       if (!mounted) return;
 
       if (outcome.error != null) {
         logDebug('loginUI: 登录失败 - ${outcome.error}');
+        ClarityAnalytics.trackEvent('login_failed');
         setState(() {
           _loading = false;
           _error = outcome.error;
@@ -163,24 +180,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(serverRepositoryProvider)
           .save(ServerProfile(baseUrl: baseUrl, username: username));
-      await ref
-          .read(serverRepositoryProvider)
-          .saveToHistory(
-            ServerProfile(
-              baseUrl: baseUrl,
-              username: username,
-              password: password,
-              timestamp: DateTime.now(),
-            ),
-          );
+      // 仅手动输入密码时保存历史；从历史自动填入时密码已是 sha256:hex，跳过。
+      if (!isHashed) {
+        await ref
+            .read(serverRepositoryProvider)
+            .saveToHistory(
+              ServerProfile(
+                baseUrl: baseUrl,
+                username: username,
+                password: password,
+                timestamp: DateTime.now(),
+              ),
+            );
+      }
       await ref.read(sessionRepositoryProvider).save(session);
       logDebug('loginUI: 登录成功，保存会话并切换到任务列表');
+      // Clarity 埋点：用户标识用不可逆哈希（避免 PII），服务器仅记录主机名
+      final host = Uri.tryParse(baseUrl)?.host ?? baseUrl;
+      ClarityAnalytics.identify(sha256Hex('$username@$host'));
+      ClarityAnalytics.setTag('server', host);
+      ClarityAnalytics.trackEvent('login_success');
       ref.read(sessionProvider.notifier).update(session);
     } on ApiException catch (e) {
       if (!mounted) return;
       logDebug(
         'loginUI: 登录异常 ApiException kind=${e.kind} msg=${e.friendlyMessage}',
       );
+      ClarityAnalytics.trackEvent('login_failed');
       setState(() {
         _loading = false;
         _error = e.kind == ApiErrorKind.timeout ? '连接超时' : e.friendlyMessage;
@@ -188,6 +214,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       logDebug('loginUI: 登录异常 $e');
+      ClarityAnalytics.trackEvent('login_failed');
       setState(() {
         _loading = false;
         _error = '登录失败：$e';

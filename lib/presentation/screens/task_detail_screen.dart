@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/domain/entities/task_status.dart';
+import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
@@ -42,6 +43,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   @override
   void initState() {
     super.initState();
+    ClarityAnalytics.trackScreen('task_detail');
     _task = widget.initialTask;
     logDebug('taskDetailUI: initState id=${widget.taskId}');
     _refresh();
@@ -148,6 +150,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         );
     _busyOps.remove(op);
     if (!mounted) return;
+    // Clarity 埋点：任务操作三态（success/failed/unconfirmed）
+    ClarityAnalytics.trackEvent('task_${op.name}_${outcome.status.name}');
     if (outcome.unauthorized) {
       setState(() => _statusMessage = outcome.message);
       await _logout();
@@ -1481,11 +1485,14 @@ class _LiveActivityToggleRowState
               taskId: widget.taskId,
               taskName: widget.taskName,
             );
+        // Clarity 埋点：区分成功开启与权限被拒
+        ClarityAnalytics.trackEvent(ok ? 'live_activity_on' : 'live_activity_denied');
         if (!ok && mounted) {
           _showSnack('实时通知需要通知权限，请在系统设置中开启');
         }
       } else {
         await ref.read(liveActivityProvider.notifier).stop();
+        ClarityAnalytics.trackEvent('live_activity_off');
       }
     } finally {
       if (mounted) setState(() => _busy = false);

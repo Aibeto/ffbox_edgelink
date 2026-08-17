@@ -26,9 +26,12 @@ class AuthService {
   Future<AuthOutcome> login({
     required String baseUrl,
     required String username,
-    required String password,
+    String password = '',
+    String? directPasskey,
   }) async {
-    logDebug('auth.login baseUrl=$baseUrl username=$username');
+    logDebug(
+      'auth.login baseUrl=$baseUrl username=$username directPasskey=${directPasskey != null}',
+    );
 
     // 匿名登录：UI 传入空凭据，服务端对空用户名/密码返回有效会话，
     // 避免伪造 sessionId 导致后续接口 401。
@@ -36,6 +39,7 @@ class AuthService {
       baseUrl: baseUrl,
       username: username,
       password: password,
+      directPasskey: directPasskey,
     );
 
     if (!result.isSuccess) {

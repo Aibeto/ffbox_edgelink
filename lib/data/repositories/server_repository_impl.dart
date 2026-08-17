@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ffbox_edgelink/core/utils/hash.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/core/utils/secret_cipher.dart';
 import 'package:ffbox_edgelink/domain/entities/server_profile.dart';
@@ -77,16 +78,29 @@ class ServerRepositoryImpl implements ServerRepository {
       final list = <ServerProfile>[];
       for (final e in raw as List) {
         final map = e as Map<String, dynamic>;
-        final p = ServerProfile.fromJson(map);
-        final password = await SecretCipher.decrypt(p.password);
-        list.add(
-          ServerProfile(
-            baseUrl: p.baseUrl,
-            username: p.username,
-            password: password,
-            timestamp: p.timestamp,
-          ),
-        );
+        var p = ServerProfile.fromJson(map);
+        // 迁移旧版 AES 密文：尝试解密，成功则转为 sha256: 前缀格式，
+        // 解密失败（密钥丢失等）则清除密码，用户需重新输入。
+        if (p.password.startsWith('enc:')) {
+          final decrypted = await SecretCipher.decrypt(p.password);
+          if (decrypted.isNotEmpty) {
+            p = ServerProfile(
+              baseUrl: p.baseUrl,
+              username: p.username,
+              password: 'sha256:${sha256Hex(decrypted)}',
+              timestamp: p.timestamp,
+            );
+          } else {
+            // 解密失败，清除损坏的密文
+            p = ServerProfile(
+              baseUrl: p.baseUrl,
+              username: p.username,
+              password: '',
+              timestamp: p.timestamp,
+            );
+          }
+        }
+        list.add(p);
       }
       final cutoff = DateTime.now().subtract(_kMaxAge);
       final filtered = list.where((p) => p.timestamp.isAfter(cutoff)).toList()
@@ -102,49 +116,38 @@ class ServerRepositoryImpl implements ServerRepository {
   @override
   Future<void> saveToHistory(ServerProfile profile) async {
     final store = await _readStore();
-    List<ServerProfile> list = const [];
     final raw = store['history'];
+    // 保留原有 JSON map（密文），避免解密/重新加密循环导致双重加密
+    final list = <Map<String, dynamic>>[];
     if (raw != null) {
       try {
-        final parsed = <ServerProfile>[];
         for (final e in raw as List) {
-          final map = e as Map<String, dynamic>;
-          final p = ServerProfile.fromJson(map);
-          parsed.add(
-            ServerProfile(
-              baseUrl: p.baseUrl,
-              username: p.username,
-              password: await SecretCipher.decrypt(p.password),
-              timestamp: p.timestamp,
-            ),
-          );
+          list.add(Map<String, dynamic>.from(e as Map));
         }
-        list = parsed;
       } catch (_) {}
     }
 
     // 去重：相同 baseUrl + username 的旧记录移除，保留最新
-    list = list
-        .where(
-          (p) =>
-              !(p.baseUrl == profile.baseUrl && p.username == profile.username),
-        )
-        .toList();
+    list.removeWhere(
+      (m) =>
+          m['baseUrl'] == profile.baseUrl && m['username'] == profile.username,
+    );
 
-    // 追加新记录到头部
-    list.insert(0, profile);
+    // 追加新记录到头部（存储 SHA-256 哈希，与服务器一致，不做本地 AES 加密）
+    final newJson = profile.toJson();
+    newJson['password'] = profile.password.isNotEmpty
+        ? 'sha256:${sha256Hex(profile.password)}'
+        : '';
+    list.insert(0, newJson);
 
     // 清理超过 7 天的记录
     final cutoff = DateTime.now().subtract(_kMaxAge);
-    list = list.where((p) => p.timestamp.isAfter(cutoff)).toList();
+    list.removeWhere((m) {
+      final ts = DateTime.tryParse(m['timestamp'] as String? ?? '');
+      return ts == null || ts.isBefore(cutoff);
+    });
 
-    final history = <Map<String, dynamic>>[];
-    for (final p in list) {
-      final json = p.toJson();
-      json['password'] = await SecretCipher.encrypt(p.password);
-      history.add(json);
-    }
-    store['history'] = history;
+    store['history'] = list;
     await _writeStore(store);
     logDebug('saveToHistory: 保存 ${list.length} 条记录');
   }

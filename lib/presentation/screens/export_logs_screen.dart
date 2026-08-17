@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:ffbox_edgelink/application/log_export/log_export_service.dart';
+import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/utils/file_logger.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
@@ -39,6 +40,7 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
   @override
   void initState() {
     super.initState();
+    ClarityAnalytics.trackScreen('export_logs');
     WidgetsBinding.instance.addPostFrameCallback((_) => _confirmAndExport());
   }
 

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -20,6 +21,12 @@ class _DeviceInfoScreenState extends State<DeviceInfoScreen> {
   final Future<List<NetworkInterface>> _interfaces = NetworkInterface.list(
     includeLinkLocal: true,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    ClarityAnalytics.trackScreen('device_info');
+  }
 
   List<_IpRow> _rows = const [];
   bool _measured = false;

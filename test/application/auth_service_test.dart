@@ -11,7 +11,8 @@ class _FakeAuthRepo implements AuthRepository {
   Future<LoginResult> login({
     required String baseUrl,
     required String username,
-    required String password,
+    String password = '',
+    String? directPasskey,
   }) async => result;
 }
 
