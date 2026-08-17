@@ -2,6 +2,7 @@
 ///
 /// clarity_flutter SDK 不支持 Web（依赖 dart:io 与原生插件），
 /// Web 构建经条件导出落到本文件，接口签名与 IO 实现保持一致。
+library;
 
 import 'package:flutter/widgets.dart';
 

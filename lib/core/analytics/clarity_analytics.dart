@@ -6,5 +6,6 @@
 /// - Web → [clarity_analytics_stub.dart] 全量 no-op 桩。
 ///
 /// 业务代码统一 `import .../clarity_analytics.dart`，无需感知平台差异。
+library;
 export 'clarity_analytics_stub.dart'
     if (dart.library.io) 'clarity_analytics_io.dart';
