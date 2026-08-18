@@ -1,20 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/application/auth/auth_service.dart';
 import 'package:ffbox_edgelink/application/live/live_activity_service.dart';
 import 'package:ffbox_edgelink/application/task/task_service.dart';
+import 'package:ffbox_edgelink/application/upload/chunk_hasher.dart';
+import 'package:ffbox_edgelink/application/upload/upload_queue.dart';
 import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/core/network/api_client.dart';
 import 'package:ffbox_edgelink/core/notifications/live_activity_channel.dart';
+import 'package:ffbox_edgelink/core/notifications/upload_notification_channel.dart';
 import 'package:ffbox_edgelink/data/repositories/auth_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/server_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/session_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/task_repository_impl.dart';
+import 'package:ffbox_edgelink/data/repositories/upload_repository_impl.dart';
 import 'package:ffbox_edgelink/data/sources/remote/ffbox_api.dart';
 import 'package:ffbox_edgelink/domain/entities/live_activity_config.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/server_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
+import 'package:ffbox_edgelink/domain/repositories/upload_repository.dart';
 
 // --- 服务器配置 ---
 
@@ -86,6 +93,11 @@ final authRepositoryProvider = Provider<AuthRepository>(
 /// 任务仓储。
 final taskRepositoryProvider = Provider<TaskRepository>(
   (ref) => TaskRepositoryImpl(ref.watch(ffboxApiProvider)),
+);
+
+/// 文件上传仓储。
+final uploadRepositoryProvider = Provider<UploadRepository>(
+  (ref) => UploadRepositoryImpl(ref.watch(ffboxApiProvider)),
 );
 
 // --- 业务服务 ---
@@ -173,3 +185,74 @@ final liveActivityProvider =
     NotifierProvider<LiveActivityNotifier, LiveActivityState>(
       LiveActivityNotifier.new,
     );
+
+// --- 远程上传（后台队列 + Android 进度通知） ---
+
+/// 上传进度原生通道。
+final uploadNotificationChannelProvider = Provider<UploadNotificationChannel>(
+  (ref) => UploadNotificationChannel(),
+);
+
+/// 全局上传队列（生命周期独立于页面）。
+final uploadQueueProvider = Provider<UploadQueue>((ref) {
+  final queue = UploadQueue(
+    repository: ref.watch(uploadRepositoryProvider),
+    hasher: ChunkHasher(),
+  );
+  ref.onDispose(queue.dispose);
+  return queue;
+});
+
+/// 队列状态流（列表页横幅与新建任务页共用）。
+final uploadQueueStateProvider = StreamProvider<UploadQueueSnapshot>(
+  (ref) => ref.watch(uploadQueueProvider).states,
+);
+
+/// 通知桥接：订阅队列状态，500ms 节流更新 Android 进度通知。
+/// 需在任务列表页 build 中 watch 以激活。
+final uploadNotificationBridgeProvider = Provider<void>((ref) {
+  final channel = ref.watch(uploadNotificationChannelProvider);
+  if (!channel.isSupported) return;
+  Timer? throttle;
+  var lastShown = false;
+  final sub = ref.watch(uploadQueueProvider).states.listen((snap) {
+    if (throttle?.isActive ?? false) return;
+    throttle = Timer(const Duration(milliseconds: 500), () async {
+      final active = snap.items
+          .where(
+            (i) =>
+                i.state == UploadItemState.pending ||
+                i.state == UploadItemState.hashing ||
+                i.state == UploadItemState.uploading ||
+                i.state == UploadItemState.merging,
+          )
+          .toList();
+      if (active.isNotEmpty) {
+        final current = active.firstWhere(
+          (i) => i.state != UploadItemState.pending,
+          orElse: () => active.first,
+        );
+        final percent = current.size > 0
+            ? (current.transferredBytes * 100 / current.size)
+                  .round()
+                  .clamp(0, 100)
+                  .toInt()
+            : 0;
+        await channel.show(
+          title: 'FFBox 上传任务',
+          content: '${current.fileBaseName} · $percent%',
+          progress: percent,
+          indeterminate: current.state == UploadItemState.hashing,
+        );
+        lastShown = true;
+      } else if (lastShown) {
+        await channel.cancel();
+        lastShown = false;
+      }
+    });
+  });
+  ref.onDispose(() {
+    throttle?.cancel();
+    sub.cancel();
+  });
+});
