@@ -40,6 +40,14 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - MethodChannel 契约 `top.raincrat.aibeto.ffboxedgelink/live_activity`：`start/stop/isRunning/getActiveConfig`；启用前走 POST_NOTIFICATIONS 权限申请。
 - 激活配置存 SharedPreferences（`live_activity_prefs`/`KEY_CONFIG`，Service 自持），App 重启经 `getActiveConfig` 恢复开关态；Dart 侧 `liveActivityProvider` 负责状态同步与校准（列表轮询发现任务消失时 `refresh()` 纠正）。
 
+## 远程新建任务（文件上传）
+
+- 列表页 AppBar「新建任务」→ `AddTaskScreen`（`lib/presentation/screens/add_task_screen.dart`）：file_picker 选文件 + 基础输出配置（vcodec/CRF/format，其余用 FFBox defaultParams 内置副本 `buildOutputParams`）。
+- 上传协议与 FFBox web（transferManager2.ts）语义一致：占位符 `[uploading] 文件名`（`uploadPlaceholder`）→ 分片 4MB/20MB（十进制）→ 每片 SHA1、文件哈希 = SHA1(分片哈希拼接)（`upload_protocol.dart`）→ `upload/check` 秒传（键 `文件名⬝文件哈希`，U+2B1D）→ `upload/file` 逐片上传（name=分片哈希，并发 2，重试 3）→ `tasks/{id}/merge-upload` → `tasks/{id}/upload-status` false。改分片大小/哈希语义须与服务端 `E:\FFBox\FFBox\src\backend\FFBoxService.ts` 同步。
+- 队列 `UploadQueue`（`lib/application/upload/upload_queue.dart`）：纯 Dart、文件串行、Stream 广播快照；Riverpod 全局持有（`uploadQueueProvider`），生命周期独立于页面（后台上传）。401 项由列表页检测 `hasUnauthorizedError` 登出。
+- Android 上传进度通知：普通 NotificationCompat（非前台服务），固定 ID 3002、channel `upload`（IMPORTANCE_LOW），MethodChannel `top.raincrat.aibeto.ffboxedgelink/upload_notification`（show/cancel），Dart 侧 500ms 节流（`uploadNotificationBridgeProvider`，在列表页/新建页 watch 激活）。与实时活动 3001 互不影响。
+- App 重启后队列清空（进程内状态）；服务端分片缓存使重传等效断点续传。
+
 ## 代码注释规范
 
 - 每个 `.dart` 文件在 import 语句之后、第一个类/函数之前必须有文件级 `///` 文档注释，概述文件职责和在架构中的位置。
