@@ -44,6 +44,8 @@ class ApiClient {
     Object? data,
     bool retryOnFailure = false,
     bool silent = false,
+    Options? options,
+    void Function(int count, int total)? onSendProgress,
   }) async {
     if (!silent) logDebug('$method $path');
     var attempt = 0;
@@ -53,7 +55,8 @@ class ApiClient {
           path,
           queryParameters: query,
           data: data,
-          options: Options(method: method),
+          options: options ?? Options(method: method),
+          onSendProgress: onSendProgress,
         );
         if (!silent) {
           logDebug(

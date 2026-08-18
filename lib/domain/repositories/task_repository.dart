@@ -23,4 +23,10 @@ abstract interface class TaskRepository {
   Future<void> pauseTasks(List<int> ids);
   Future<void> resumeTasks(List<int> ids);
   Future<void> resetTasks(List<int> ids);
+
+  /// 批量创建任务（[filePaths] 为服务器侧路径或上传占位符），返回任务 ID 列表。
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  );
 }

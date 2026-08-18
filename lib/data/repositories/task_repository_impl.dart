@@ -34,4 +34,10 @@ class TaskRepositoryImpl implements TaskRepository {
   Future<void> resumeTasks(List<int> ids) => _api.resumeTasks(ids);
   @override
   Future<void> resetTasks(List<int> ids) => _api.resetTasks(ids);
+
+  @override
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  ) => _api.createTasks(filePaths, outputParams);
 }

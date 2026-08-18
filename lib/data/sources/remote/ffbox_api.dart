@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/core/network/api_client.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
@@ -89,6 +90,73 @@ class FFBoxApi {
       data: {'filePaths': filePaths, 'outputParams': outputParams},
     );
     return json.map((e) => (e as num).toInt()).toList();
+  }
+
+  // --- 文件上传 ---
+
+  /// 批量检查哈希是否已缓存（1=已缓存，0=未缓存）。
+  Future<List<int>> uploadCheck(List<String> hashs) async {
+    final json = await _client.request<List<dynamic>>(
+      method: 'POST',
+      path: _url('/api/v1/upload/check'),
+      data: {'hashs': hashs},
+    );
+    return json.map((e) => (e as num).toInt()).toList();
+  }
+
+  /// 上传单个分片：multipart 字段 name=分片哈希、file=分片数据。
+  /// 发送超时放宽到 10 分钟（大分片慢网）；[onProgress] 回调 (已发送, 分片总长)。
+  Future<void> uploadFile(
+    String hash,
+    int length,
+    Stream<List<int>> Function() openStream, {
+    void Function(int count, int total)? onProgress,
+  }) async {
+    final form =
+        FormData()
+          ..fields.add(MapEntry('name', hash))
+          ..files.add(
+            MapEntry('file', MultipartFile.fromStream(openStream, length)),
+          );
+    await _client.request<dynamic>(
+      method: 'POST',
+      path: _url('/api/v1/upload/file'),
+      data: form,
+      options: Options(
+        method: 'POST',
+        sendTimeout: const Duration(minutes: 10),
+      ),
+      onSendProgress: onProgress,
+    );
+  }
+
+  /// 合并已上传分片，将任务输入占位符替换为真实缓存文件名。
+  Future<void> mergeUpload(
+    int taskId, {
+    required List<String> hashs,
+    required String fileBaseName,
+    required String inputName,
+    required Map<String, int> fileTime,
+  }) async {
+    await _client.request<dynamic>(
+      method: 'POST',
+      path: _url('/api/v1/tasks/$taskId/merge-upload'),
+      data: {
+        'hashs': hashs,
+        'fileBaseName': fileBaseName,
+        'inputName': inputName,
+        'fileTime': fileTime,
+      },
+    );
+  }
+
+  /// 设置任务上传状态（false 时 initializing→idle 并触发媒体信息扫描）。
+  Future<void> setUploadStatus(int taskId, bool isUploading) async {
+    await _client.request<dynamic>(
+      method: 'PUT',
+      path: _url('/api/v1/tasks/$taskId/upload-status'),
+      data: {'isUploading': isUploading},
+    );
   }
 
   // --- 批量操作 ---

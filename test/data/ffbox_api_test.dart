@@ -91,6 +91,98 @@ void main() {
     });
   });
 
+  group('FFBoxApi.uploadCheck', () {
+    test('POST hashs 并解析 0/1 数组', () async {
+      late Map<String, dynamic>? received;
+      final api = _buildApi((options) {
+        received = options.data as Map<String, dynamic>;
+        return [1, 0];
+      });
+      final result = await api.uploadCheck(['a⬝b', 'c']);
+      expect(result, [1, 0]);
+      expect(received, {
+        'hashs': ['a⬝b', 'c'],
+      });
+    });
+  });
+
+  group('FFBoxApi.uploadFile', () {
+    test('multipart 字段 name=hash 且 file 分片携带正确长度', () async {
+      late FormData received;
+      final api = _buildApi((options) {
+        received = options.data as FormData;
+        return {'success': true};
+      });
+      final bytes = List<int>.generate(1024, (i) => i % 251);
+      await api.uploadFile(
+        'abc123',
+        1024,
+        () => Stream<List<int>>.value(bytes),
+      );
+      expect(received.fields, hasLength(1));
+      expect(received.fields.first.key, 'name');
+      expect(received.fields.first.value, 'abc123');
+      expect(received.files, hasLength(1));
+      expect(received.files.first.key, 'file');
+      // 请求已 finalize 原 MultipartFile，clone() 复用 dataBuilder 再取流。
+      final fileBytes = await received.files.first.value
+          .clone()
+          .finalize()
+          .fold<List<int>>(<int>[], (acc, d) => acc..addAll(d));
+      expect(fileBytes.length, 1024);
+    });
+  });
+
+  group('FFBoxApi.mergeUpload', () {
+    test('POST 合并参数', () async {
+      late Map<String, dynamic> received;
+      late String path;
+      final api = _buildApi((options) {
+        received = options.data as Map<String, dynamic>;
+        path = options.path;
+        return {'success': true};
+      });
+      await api.mergeUpload(
+        5,
+        hashs: ['h1', 'h2'],
+        fileBaseName: 'a.mp4',
+        inputName: '[uploading] a.mp4',
+        fileTime: {
+          'accessTime': 1,
+          'createTime': 2,
+          'modifyTime': 3,
+        },
+      );
+      expect(path, contains('/api/v1/tasks/5/merge-upload'));
+      expect(received['hashs'], ['h1', 'h2']);
+      expect(received['fileBaseName'], 'a.mp4');
+      expect(received['inputName'], '[uploading] a.mp4');
+      expect(received['fileTime'], {
+        'accessTime': 1,
+        'createTime': 2,
+        'modifyTime': 3,
+      });
+    });
+  });
+
+  group('FFBoxApi.setUploadStatus', () {
+    test('PUT isUploading', () async {
+      late Map<String, dynamic> received;
+      late String method;
+      late String path;
+      final api = _buildApi((options) {
+        received = options.data as Map<String, dynamic>;
+        method = options.method;
+        path = options.path;
+        return {'success': true};
+      });
+      await api.setUploadStatus(7, false);
+      expect(method, 'PUT');
+      expect(path, contains('/api/v1/tasks/7/upload-status'));
+      expect(received, {'isUploading': false});
+    });
+  });
+
   group('FileLogger', () {
     test('记录原始响应数据到内存缓冲区', () async {
       fileLogger.clearBuffers();
