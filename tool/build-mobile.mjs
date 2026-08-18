@@ -348,9 +348,7 @@ function copyAssets() {
 
 	// 内置 webUI 静态资源 → nodejs-project/webUI/：webuiServer 会依次探测若干
 	// 候选路径找 webUI/index.html，其中 process.cwd()/webUI 一项即 README 所述
-	// 「webUI 与 FFBoxService 并排放置」语义。本 worker 运行时 cwd 不可控（Android
-	// 下非 nodejs-project），故 mobile-entry 在启动 webUI 前 chdir(__dirname)（即
-	// index.cjs 所在目录），使 webUI 子目录命中该候选（见 mobile-entry 内置 webUI）。
+	// 「webUI 与 FFBoxService 并排放置」语义。
 	const webUiSrc = path.join(repoRoot, 'service', 'webUI');
 	const webUiDst = path.join(assetsDir, 'webUI');
 	if (existsSync(path.join(webUiSrc, 'index.html'))) {

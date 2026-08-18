@@ -116,10 +116,7 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
         ),
         title: Text(
           '需要“所有文件访问”权限',
-          style: AkTheme.sans(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         content: Text(
           '内置 FFBox 服务需要读取您手机中的视频/媒体文件进行转码。\n'
@@ -133,7 +130,10 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('取消', style: AkTheme.sans(color: AkColors.textSecondary)),
+            child: Text(
+              '取消',
+              style: AkTheme.sans(color: AkColors.textSecondary),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -160,59 +160,62 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('本地服务')),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // --- 状态卡 ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: _StatusCard(status: _status, port: LocalNodeService.defaultPort),
-          ),
-
-          // --- 操作按钮 ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: AkButton(
-              label: _status.state == LocalNodeState.stopped
-                  ? '启动服务'
-                  : _status.state == LocalNodeState.starting
-                  ? '启动中'
-                  : _status.state == LocalNodeState.stopping
-                  ? '停止中'
-                  : '停止服务',
-              backgroundColor: running ? AkColors.danger : AkColors.info,
-              foregroundColor: AkColors.textInverse,
-              loading: _busy || transitional,
-              onPressed: (_busy || transitional) ? null : _toggle,
-            ),
-          ),
-
-          // --- 提示 ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Text(
-              running
-                  ? '服务正在后台运行，返回登录页或任务列表不会中断；'
-                    '登录页地址栏输入 ${_status.baseUrl ?? 'http://127.0.0.1:${LocalNodeService.defaultPort}'} 即可连接。'
-                  : '启动后 FFBox 服务将运行于本机，可在后台持续转码，'
-                    '直到手动停止或应用被系统终止。',
-              style: AkTheme.sans(
-                fontSize: 12,
-                color: AkColors.textSecondary,
-                height: 1.6,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // --- 状态卡 ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: _StatusCard(
+                status: _status,
+                port: LocalNodeService.defaultPort,
               ),
             ),
-          ),
 
-          // --- 运行环境目录（缓存/配置实际落盘位置） ---
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: _RuntimeEnvCard(),
-          ),
+            // --- 操作按钮 ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: AkButton(
+                label: _status.state == LocalNodeState.stopped
+                    ? '启动服务'
+                    : _status.state == LocalNodeState.starting
+                    ? '启动中'
+                    : _status.state == LocalNodeState.stopping
+                    ? '停止中'
+                    : '停止服务',
+                backgroundColor: running ? AkColors.danger : AkColors.info,
+                foregroundColor: AkColors.textInverse,
+                loading: _busy || transitional,
+                onPressed: (_busy || transitional) ? null : _toggle,
+              ),
+            ),
 
-          // --- 日志面板 ---
-          Expanded(
-            child: Padding(
+            // --- 提示 ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Text(
+                running
+                    ? '服务正在后台运行，返回登录页或任务列表不会中断；'
+                          '登录页地址栏输入 ${_status.baseUrl ?? 'http://127.0.0.1:${LocalNodeService.defaultPort}'} 即可连接。'
+                    : '启动后 FFBox 服务将运行于本机，可在后台持续转码，'
+                          '直到手动停止或应用被系统终止。',
+                style: AkTheme.sans(
+                  fontSize: 12,
+                  color: AkColors.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+            ),
+
+            // --- 运行环境目录（缓存/配置实际落盘位置） ---
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: _RuntimeEnvCard(),
+            ),
+
+            // --- 日志面板（固定高度，内容超长时列表内部滚动） ---
+            Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               child: _LogPanel(
                 key: _logKey,
@@ -220,8 +223,8 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
                 logs: _logs,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -299,7 +302,7 @@ class _LogPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 320),
+      height: 400,
       decoration: BoxDecoration(
         color: AkColors.panel,
         border: Border.all(color: AkColors.border),
@@ -316,10 +319,7 @@ class _LogPanel extends StatelessWidget {
             )
           : ListView.builder(
               controller: controller,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               itemCount: logs.length,
               itemBuilder: (_, i) => Text(
                 logs[i],
@@ -420,10 +420,7 @@ class _EnvRow extends StatelessWidget {
             width: 84,
             child: Text(
               label,
-              style: AkTheme.sans(
-                fontSize: 11,
-                color: AkColors.textSecondary,
-              ),
+              style: AkTheme.sans(fontSize: 11, color: AkColors.textSecondary),
             ),
           ),
           Expanded(
