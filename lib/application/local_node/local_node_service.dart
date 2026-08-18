@@ -82,8 +82,9 @@ class LocalNodeService {
     if (_initialized) return;
     // 先校准 ABI（仅 Android arm64-v8a 支持），避免深链直达时误判
     await _channel.querySupported();
-    if (!_channel.isSupported) return;
+    // 不支持时也标记已初始化：后续重复调用直接短路，避免反复查询 ABI
     _initialized = true;
+    if (!_channel.isSupported) return;
     _logSub = _channel.logLines().listen(
       (raw) {
         final line = sanitizeLog(raw);
