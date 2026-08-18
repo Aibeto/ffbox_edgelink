@@ -293,11 +293,51 @@ class _StatusCard extends StatelessWidget {
 // 日志面板
 // ---------------------------------------------------------------------------
 
-class _LogPanel extends StatelessWidget {
+class _LogPanel extends StatefulWidget {
   final ScrollController controller;
   final List<String> logs;
 
   const _LogPanel({super.key, required this.controller, required this.logs});
+
+  @override
+  State<_LogPanel> createState() => _LogPanelState();
+}
+
+class _LogPanelState extends State<_LogPanel> {
+  /// 用户是否已向上滚动离开底部（此时显示“跳转最后一行”按钮）
+  bool _awayFromBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final controller = widget.controller;
+    if (!controller.hasClients) return;
+    final away =
+        controller.position.pixels < controller.position.maxScrollExtent - 24;
+    if (_awayFromBottom != away) {
+      setState(() => _awayFromBottom = away);
+    }
+  }
+
+  void _jumpToBottom() {
+    final controller = widget.controller;
+    if (!controller.hasClients) return;
+    controller.animateTo(
+      controller.position.maxScrollExtent,
+      duration: AkTheme.motionBase,
+      curve: Curves.easeOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,31 +347,74 @@ class _LogPanel extends StatelessWidget {
         color: AkColors.panel,
         border: Border.all(color: AkColors.border),
       ),
-      child: logs.isEmpty
-          ? Center(
-              child: Text(
-                '暂无日志',
-                style: AkTheme.sans(
-                  fontSize: 12,
-                  color: AkColors.textSecondary,
-                ),
-              ),
-            )
-          : ListView.builder(
-              controller: controller,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              itemCount: logs.length,
-              itemBuilder: (_, i) => Text(
-                logs[i],
-                style: AkTheme.mono(
-                  fontSize: 11,
-                  color: logs[i].startsWith('[error]')
-                      ? AkColors.danger
-                      : AkColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: widget.logs.isEmpty
+                ? Center(
+                    child: Text(
+                      '暂无日志',
+                      style: AkTheme.sans(
+                        fontSize: 12,
+                        color: AkColors.textSecondary,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    controller: widget.controller,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    itemCount: widget.logs.length,
+                    itemBuilder: (_, i) => Text(
+                      widget.logs[i],
+                      style: AkTheme.mono(
+                        fontSize: 11,
+                        color: widget.logs[i].startsWith('[error]')
+                            ? AkColors.danger
+                            : AkColors.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+          ),
+          if (_awayFromBottom)
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: _JumpToBottomButton(onTap: _jumpToBottom),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 日志面板右下角的“跳转至最后一行”圆形按钮
+class _JumpToBottomButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _JumpToBottomButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AkColors.panel,
+      shape: const CircleBorder(side: BorderSide(color: AkColors.border)),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.all(6),
+          child: Icon(
+            Icons.keyboard_arrow_down,
+            size: 20,
+            color: AkColors.textPrimary,
+          ),
+        ),
+      ),
     );
   }
 }
