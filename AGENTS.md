@@ -27,6 +27,21 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 写操作「查询确认」优先于盲目重试：超时后重查状态确认结果，返回三态（成功/失败/未知）。
 - 网络：连接/发送/接收超时 + 幂等 GET 有限重试；错误统一经 `ApiException` 分类给友好文案，容忍单通与丢包。
 
+## 内置 FFBox 服务（仅 Android）
+
+- 参考设计 `../FFBox/docs/android-app-design.md`。登录页右上角入口按钮以 `Platform.isAndroid` 门控，其余平台（Windows/iOS/Web）整块隐藏；`LocalNodeChannel.isSupported` 为唯一能力开关。
+- 技术方案：**nodejs-mobile v18.20.4**（libnode.so 进程内 Node 线程，arm64-v8a only）。**pkg 的 Linux ELF 二进制在 Android 上不可用**（glibc/Bionic 不兼容 + W^X 限制），后端以 esbuild 单文件 `index.cjs`（依赖全内联）经 assets 分发。
+- 构建链在本仓库 `tool/build-mobile.mjs`（FFBox 主仓库零改动，esbuild 为 tool 本地 devDependency）：esbuild 打包 `tool/mobile/mobile-entry.ts`（入口复刻 index.ts，额外支持优雅停止）→ `android/app/src/main/assets/nodejs-project/`；自动下载放置 libnode.so 与 node.h（gitignore）。**CJS 兼容三件套**（vite/rolldown 均无法正确处理，勿回退）：① `utimes` native 模块 alias 为 no-op shim；② `force-cjs-entries` 插件将全部裸包名按 require 条件解析（`require.resolve`），绕过双系统包（ws/koa-body 等）exports 的 ESM 分支——其 default 导出不含 `.Server` 等挂载属性，会报 `xx is not a constructor`；③ koa-body@6 CJS 缺 `koaBody` 命名导出，onLoad 注入 `exports.koaBody = exports.default`。产物用 `node --check` + 本机 smoke test（监听 33269 返回 200）验证。
+- FFmpeg 内置：`tool/build-mobile.mjs` 下载 Android arm64 静态二进制（`FFMPEG_ZIP_URL` 默认 `rhythmcache/ffmpeg-android` build-264 的 arm64-v8a 静态 Magisk 模块 zip；旧源 `nickysn/ffmpeg-android-builder` 已 404）。**该 zip 内含嵌套 `ffmpeg.tar.xz`**：脚本解外层 zip 后递归解压嵌套 tar/tar.xz/tar.gz 归档（node 不内置 xz，用系统 `tar`，Windows 自带 bsdtar 自动识别压缩格式），每次解压后删除原归档防死循环，直到找到 `ffmpeg`/`ffprobe`。**二进制必须以 `libffmpeg.so`/`libffprobe.so` 之名放入 `jniLibs/arm64-v8a/`**（勿放 assets：Android 10+ targetSdk≥29 的 SELinux W^X 限制使 untrusted_app 域**禁止 exec filesDir 等应用数据目录文件**——spawn 报 EACCES，经 spawnInvoker 映射为「启动异常」；注意 `adb shell run-as` 测试走 `runas_app` 调试域可 exec，**不能**代表 App 域行为）。安装后系统解压到 `nativeLibraryDir`（App 域内唯一可 exec 自带二进制的位置），前提是 `build.gradle.kts` 开启 `packagingOptions.jniLibs.useLegacyPackaging = true`（否则 so 压缩在 APK 内、无磁盘文件可 exec）。链路：Kotlin `buildStartCommand` 附带 `nativeLibraryDir` → `main.js` 存为 `FFMPEG_DIR` 传 worker → `mobile-entry.ts` 在创建 `FFBoxService` 前**合并**写入 `localConfig.set('service', { ..., customFFmpegPath: <nativeLibraryDir>/libffmpeg.so })`（勿覆盖已有 maxThreads/preserveUnfinishedTasks 等）；因 FFBox 按「同目录/ffprobe」推断 ffprobe 而实际文件名为 `libffprobe.so`，`mobile-entry.ts` 监听 `ffmpegInfo` 事件持续把 `service.ffprobePath` 修正为实际文件（设置重载后重扫亦会触发）。下载失败时打印警告并继续，可手动放置二进制。
+- 运行时环境目录（Android）：nodejs-mobile 的 libuv 硬编码 `os.tmpdir()==/data/local/tmp`（不读 TMPDIR），普通 App 不可写。宿主 `main.js` 设 `TMPDIR=filesDir/cache`、`XDG_CONFIG_HOME=filesDir/config`；`mobile-entry.ts` 必须在加载 FFBox 模块前 `os.tmpdir=()=>TMPDIR` 补丁（FFBox「uiBridge」在模块加载即读 tmpdir，故须 require() 后加载）。因此 FFBox 代码里的 `os.tmpdir()/FFBoxUploadCache`、`os.tmpdir()/FFBoxDownloadCache` 实际创建于 `filesDir/cache/FFBoxUploadCache`、`filesDir/cache/FFBoxDownloadCache`。
+- 存储权限（内置服务读用户媒体转码）：manifest 声明 `MANAGE_EXTERNAL_STORAGE`（API 30+，`tools:ignore="ScopedStorage"`）+ `READ_EXTERNAL_STORAGE`（API 23-29，`maxSdkVersion=32`）。`LocalNodeChannel.kt` 提供 `hasStoragePermission`（API 30+ 用 `Environment.isExternalStorageManager`）/`requestStoragePermission`（打开所有文件访问设置页，`ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION` 缺失时回退总列表）；Dart `LocalNodeChannel` 暴露同名方法；`LocalServiceScreen` 启动服务前先检查权限，未授权弹窗引导去授权。
+- 运行时分层：`main.js`（宿主，常驻：设 XDG_CONFIG_HOME/TMPDIR → 监听控制 Unix socket `filesDir/nodejs-project/nodectl.sock` → worker_threads 拉起/终止 `index.cjs`）。**引擎只启动一次且常驻**（nodejs-mobile 限制：Node 线程不可重启、process.exit 会杀整个 app 进程）；FFBox 后端跑在 worker 中，停止 = parentPort 发 stop → `taskPauseBatch` 全部活跃任务（终止 ffmpeg 防孤儿）→ `process.exit(0)`（worker 内仅结束线程，端口自动释放）→ 可再次拉起。
+- 协议（JSON Lines over Unix socket）：`{type:'start'|'stop'}` 下行指令；`{type:'log',line}` / `{type:'state',running}` 上行事件。
+- 原生侧 `LocalNodeService`（前台服务 dataSync + 通知 ID 3002）：首次启动按 `BUILD_VERSION` 解包 assets 到 filesDir；`LocalNodeChannel` 提供 MethodChannel `local_node`（startNode/stopNode/isNodeRunning）与 EventChannel `local_node_logs`（回调经 mainLooper 切主线程）。JNI 桥 `cpp/nodejni.cpp` 调 libnode 的 **`node::Start`**（C++ 符号 `_ZN4node5StartEiPPc`，CMake include 指向 `cpp/include/node`；注意 libnode.so **无** C 函数 `node_start`，写错符号名运行时直接 UnsatisfiedLinkError）。
+- Dart 侧：`LocalNodeService`（application，状态机 + 500 行日志环形缓冲）、`LocalServiceScreen`（presentation）。服务默认端口 33269，登录页地址栏输入 `http://127.0.0.1:33269` 连接本机服务。
+- 生命周期语义：页面切换/返回登录页不影响运行（前台服务保活）；「停止服务」按钮手动停止；App 进程被 kill 时服务随之终止。
+- 已知风险：nodejs-mobile 官方 libnode.so 非 16KB page 对齐，Android 15+ 强制 16KB 的设备上可能加载失败（需自行重编译 libnode）。
+
 ## Android 实时活动通知（Live Updates）
 
 - 详情页开关将当前任务推送为实时通知；**全局只允许一条**：单例前台服务 `LiveTaskService` + 固定通知 ID `3001`，切换任务直接替换轮询与通知。
@@ -57,6 +72,8 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 任务详情页 `TaskDetailScreen`：`GET /api/v1/tasks/{id}` 1s 轮询（防重入、保留旧数据），展示输入媒体、输出配置、遥测曲线（progressLog）、输出文件、转码日志。
 - 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。
 - 长标题用 `MarqueeText`（`lib/presentation/widgets/marquee_text.dart`）循环滚动，不引入外部包。
+- 内置本地服务（nodejs-mobile）仅 Android arm64-v8a 支持：登录页「本地服务」入口经 `localNodeSupportedProvider` 校准原生 ABI（MethodChannel `abi` → `Build.SUPPORTED_ABIS.first`）后显示；非 arm64 设备隐藏入口，`LocalNodeChannel.isSupported` 为 false，启动/停止/初始化均短路。新增支持 ABI 时须同步原生 `abi` 返回与 Dart `_supportedAbi`。
+- 构建要点：`build.gradle.kts` 中 `defaultConfig.ndk` 必须 `abiFilters.clear()` 后仅限 `arm64-v8a`；`defaultConfig.externalNativeBuild.cmake.arguments` 必须包含 `-DANDROID_STL=c++_shared`（`libnode.so` 依赖 NDK C++ 运行时），否则 `System.loadLibrary("nodeext")` 因 `libc++_shared.so` 缺失抛出 `UnsatisfiedLinkError` 闪退。Kotlin 侧 `catch (Throwable)` 而非 `catch (Exception)` 以防御此类 Error 子类。
 
 ## 实施方案
 

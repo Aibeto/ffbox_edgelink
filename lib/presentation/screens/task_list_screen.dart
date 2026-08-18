@@ -8,6 +8,7 @@ import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
+import 'package:ffbox_edgelink/presentation/screens/server_settings_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
@@ -146,6 +147,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     );
   }
 
+  void _openSettings() {
+    logDebug('taskListUI: 打开服务端配置');
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+    );
+  }
+
   String _hostOf(String? baseUrl) {
     if (baseUrl == null || baseUrl.isEmpty) return '未连接';
     final uri = Uri.tryParse(baseUrl);
@@ -230,6 +238,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         latencyMs: _latencyMs,
         latencyColor: _latencyColor(_latencyMs),
         onRefresh: _refresh,
+        onSettings: _openSettings,
         onLogout: _logout,
       ),
       body: Column(
@@ -389,6 +398,7 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
   final int latencyMs;
   final Color latencyColor;
   final VoidCallback onRefresh;
+  final VoidCallback onSettings;
   final VoidCallback onLogout;
 
   const _AkAppBar({
@@ -396,6 +406,7 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.latencyMs,
     required this.latencyColor,
     required this.onRefresh,
+    required this.onSettings,
     required this.onLogout,
   });
 
@@ -456,6 +467,13 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
               icon: Icons.refresh,
               tooltip: '刷新',
               onPressed: onRefresh,
+            ),
+
+            // Server settings
+            _AppBarIconButton(
+              icon: Icons.settings_outlined,
+              tooltip: '服务端配置',
+              onPressed: onSettings,
             ),
 
             // Logout

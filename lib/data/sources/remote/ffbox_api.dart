@@ -2,6 +2,7 @@ import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/core/network/api_client.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/domain/entities/login_result.dart';
+import 'package:ffbox_edgelink/domain/entities/server_settings.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 
 /// FFBox 后端 HTTP 端点。仅负责原始 JSON 请求/响应，不含业务逻辑。
@@ -113,4 +114,24 @@ class FFBoxApi {
       _batchRequest('/api/v1/tasks/resume', ids);
   Future<void> resetTasks(List<int> ids) =>
       _batchRequest('/api/v1/tasks/reset', ids);
+
+  // --- 服务器配置 ---
+
+  /// 获取服务器配置（并发/FFmpeg 路径/任务保留策略等）。
+  Future<ServerSettings> getServerSettings() async {
+    final json = await _client.request<Map<String, dynamic>>(
+      method: 'GET',
+      path: _url('/api/v1/settings/server'),
+    );
+    return ServerSettings.fromJson(json);
+  }
+
+  /// 更新服务器配置并使其生效。
+  Future<void> updateServerSettings(ServerSettings settings) async {
+    await _client.request<dynamic>(
+      method: 'PUT',
+      path: _url('/api/v1/settings/server'),
+      data: settings.toJson(),
+    );
+  }
 }

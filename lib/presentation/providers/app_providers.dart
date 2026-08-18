@@ -1,18 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/application/auth/auth_service.dart';
 import 'package:ffbox_edgelink/application/live/live_activity_service.dart';
+import 'package:ffbox_edgelink/application/local_node/local_node_service.dart';
 import 'package:ffbox_edgelink/application/task/task_service.dart';
 import 'package:ffbox_edgelink/core/config/app_config.dart';
 import 'package:ffbox_edgelink/core/network/api_client.dart';
+import 'package:ffbox_edgelink/core/network/local_node_channel.dart';
 import 'package:ffbox_edgelink/core/notifications/live_activity_channel.dart';
 import 'package:ffbox_edgelink/data/repositories/auth_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/server_repository_impl.dart';
+import 'package:ffbox_edgelink/data/repositories/server_settings_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/session_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/task_repository_impl.dart';
 import 'package:ffbox_edgelink/data/sources/remote/ffbox_api.dart';
 import 'package:ffbox_edgelink/domain/entities/live_activity_config.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/server_repository.dart';
+import 'package:ffbox_edgelink/domain/repositories/server_settings_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/task_repository.dart';
 
@@ -86,6 +90,11 @@ final authRepositoryProvider = Provider<AuthRepository>(
 /// 任务仓储。
 final taskRepositoryProvider = Provider<TaskRepository>(
   (ref) => TaskRepositoryImpl(ref.watch(ffboxApiProvider)),
+);
+
+/// 服务器配置仓储。
+final serverSettingsRepositoryProvider = Provider<ServerSettingsRepository>(
+  (ref) => ServerSettingsRepositoryImpl(ref.watch(ffboxApiProvider)),
 );
 
 // --- 业务服务 ---
@@ -173,3 +182,21 @@ final liveActivityProvider =
     NotifierProvider<LiveActivityNotifier, LiveActivityState>(
       LiveActivityNotifier.new,
     );
+
+// --- 内置 FFBox 服务（仅 Android arm64-v8a，nodejs-mobile 本机后端） ---
+
+/// 内置服务原生通道。
+final localNodeChannelProvider = Provider<LocalNodeChannel>(
+  (ref) => LocalNodeChannel(),
+);
+
+/// 当前设备是否支持内置服务（仅 Android 且主 ABI 为 arm64-v8a）。
+/// UI 据此决定是否显示「本地服务」入口。
+final localNodeSupportedProvider = FutureProvider<bool>((ref) async {
+  return ref.watch(localNodeChannelProvider).querySupported();
+});
+
+/// 内置服务业务服务（状态机 + 日志缓冲）。
+final localNodeServiceProvider = Provider<LocalNodeService>(
+  (ref) => LocalNodeService(ref.watch(localNodeChannelProvider)),
+);

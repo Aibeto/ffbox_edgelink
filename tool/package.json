@@ -1,0 +1,15 @@
+{
+  "name": "ffbox-edgelink-tools",
+  "private": true,
+  "type": "module",
+  "description": "内置 FFBox 服务（Android）构建工具链",
+  "scripts": {
+    "build": "node build-mobile.mjs"
+  },
+  "dependencies": {
+    "unzip-stream": "^0.3.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

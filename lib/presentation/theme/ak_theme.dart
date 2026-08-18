@@ -151,6 +151,7 @@ class AkTheme {
     Color color = AkColors.textPrimary,
     double letterSpacing = 0,
     double height = 1.4,
+    List<String>? fontFamilyFallback,
   }) => TextStyle(
     fontFamily: 'monospace',
     fontSize: fontSize,
@@ -158,6 +159,9 @@ class AkTheme {
     color: color,
     letterSpacing: letterSpacing,
     height: height,
+    // monospace 字体缺少部分字形（全角空格 U+3000、制表符、特殊符号等），
+    // 回退到无衬线字体（Android 为 Noto Sans CJK）补齐，避免渲染成“口”豆腐块。
+    fontFamilyFallback: fontFamilyFallback ?? const ['sans-serif'],
   );
 
   static ThemeData get dark => ThemeData(
