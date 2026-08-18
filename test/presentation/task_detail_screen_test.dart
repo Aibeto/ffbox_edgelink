@@ -90,6 +90,11 @@ class _FakeTaskRepo implements TaskRepository {
   Future<void> resumeTasks(List<int> ids) async {}
   @override
   Future<void> resetTasks(List<int> ids) async {}
+  @override
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  ) async => [1];
 }
 
 class _ErrorTaskRepo implements TaskRepository {
@@ -126,6 +131,11 @@ class _ErrorTaskRepo implements TaskRepository {
   Future<void> resumeTasks(List<int> ids) async {}
   @override
   Future<void> resetTasks(List<int> ids) async {}
+  @override
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  ) async => [1];
 }
 
 Widget _buildApp(_FakeTaskRepo repo) {

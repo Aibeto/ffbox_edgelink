@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ffbox_edgelink/application/upload/upload_queue.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
+import 'package:ffbox_edgelink/presentation/screens/add_task_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 import 'package:ffbox_edgelink/presentation/widgets/task_tile.dart';
@@ -33,6 +35,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   /// 正在执行操作的任务 ID 集合，防止重复点击导致并发请求。
   final Set<int> _busyTaskIds = {};
+
+  /// 上传队列 401 登出防重入标记（postFrame 回调只调度一次）。
+  bool _uploadLogoutScheduled = false;
 
   static const _pollInterval = Duration(milliseconds: 500);
 
@@ -135,6 +140,15 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     ref.read(sessionProvider.notifier).update(null);
   }
 
+  // --- 远程新建任务 ---
+
+  void _openAddTask() {
+    logDebug('taskListUI: 打开新建任务');
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+    );
+  }
+
   // --- 任务操作 ---
 
   void _openDetail(Task task) {
@@ -224,16 +238,31 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     final deviceName = _hostOf(session?.baseUrl);
     final live = ref.watch(liveActivityProvider);
 
+    // 上传队列出现 401：与轮询 401 一致，登出（防重入，只调度一次）
+    final uploadSnap = ref.watch(uploadQueueStateProvider).value;
+    if (uploadSnap != null &&
+        uploadSnap.hasUnauthorizedError &&
+        !_uploadLogoutScheduled) {
+      _uploadLogoutScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) await _logout();
+      });
+    }
+
     return Scaffold(
       appBar: _AkAppBar(
         title: deviceName,
         latencyMs: _latencyMs,
         latencyColor: _latencyColor(_latencyMs),
+        onAddTask: _openAddTask,
         onRefresh: _refresh,
         onLogout: _logout,
       ),
       body: Column(
         children: [
+          // --- 上传进度横幅 ---
+          const _UploadBanner(),
+
           // --- 内联操作状态 ---
           if (_statusMessage != null)
             Container(
@@ -388,6 +417,7 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final int latencyMs;
   final Color latencyColor;
+  final VoidCallback onAddTask;
   final VoidCallback onRefresh;
   final VoidCallback onLogout;
 
@@ -395,6 +425,7 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     required this.latencyMs,
     required this.latencyColor,
+    required this.onAddTask,
     required this.onRefresh,
     required this.onLogout,
   });
@@ -449,6 +480,13 @@ class _AkAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ],
               ),
+            ),
+
+            // 新建任务
+            _AppBarIconButton(
+              icon: Icons.add_task,
+              tooltip: '新建任务',
+              onPressed: onAddTask,
             ),
 
             // Refresh
@@ -527,6 +565,88 @@ class _FailedWarningBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Upload progress banner
+// ---------------------------------------------------------------------------
+
+/// 后台上传进度横幅：活跃时显示当前文件与进度，全部结束自动隐藏；
+/// 同时在此激活 Android 通知桥接（uploadNotificationBridgeProvider）。
+class _UploadBanner extends ConsumerWidget {
+  const _UploadBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(uploadNotificationBridgeProvider);
+    final snap = ref.watch(uploadQueueStateProvider).value;
+    if (snap == null || !snap.hasActive) return const SizedBox.shrink();
+
+    final current = snap.items.firstWhere(
+      (i) =>
+          i.state == UploadItemState.hashing ||
+          i.state == UploadItemState.uploading ||
+          i.state == UploadItemState.merging,
+      orElse: () => snap.items.first,
+    );
+    final percent = current.size > 0
+        ? (current.transferredBytes * 100 / current.size).clamp(0, 100)
+        : 0.0;
+    final speedText = current.speedBps > 0
+        ? ' · ${(current.speedBps / 1000 / 1000).toStringAsFixed(1)} MB/s'
+        : '';
+
+    return Material(
+      key: const Key('upload_banner'),
+      color: AkColors.info.withValues(alpha: 0.12),
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: AkColors.info,
+                width: AkTheme.signalBorder,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.upload_file, size: 16, color: AkColors.info),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '上传 ${current.fileBaseName} · ${percent.toStringAsFixed(0)}%$speedText',
+                  style: AkTheme.sans(
+                    fontSize: 13,
+                    color: AkColors.info,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 64,
+                height: 3,
+                child: LinearProgressIndicator(
+                  value: percent / 100,
+                  backgroundColor: AkColors.muted,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AkColors.info,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

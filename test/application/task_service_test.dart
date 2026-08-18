@@ -26,6 +26,11 @@ class _FakeTaskRepo implements TaskRepository {
   Future<void> resumeTasks(List<int> ids) async {}
   @override
   Future<void> resetTasks(List<int> ids) async {}
+  @override
+  Future<List<int>> createTasks(
+    List<String> filePaths,
+    Map<String, dynamic>? outputParams,
+  ) async => [1];
 }
 
 void main() {
