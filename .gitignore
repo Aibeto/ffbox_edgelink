@@ -49,3 +49,10 @@ app.*.map.json
 /android/app/src/main/assets/nodejs-project/index.cjs
 /android/app/src/main/jniLibs/
 /android/app/src/main/cpp/include/
+
+# Android 本地构建产物
+android/.gradle_home/
+android/build/
+
+# 临时调试文件
+test/tmp_error_debug_test.dart
