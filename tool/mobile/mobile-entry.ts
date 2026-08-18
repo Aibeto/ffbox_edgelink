@@ -38,6 +38,10 @@ const UIBridge = require('../../../FFBox/src/backend/uiBridge').default;
 const { version } = require('../../../FFBox/src/common/constants');
 const { NotificationLevel } = require('../../../FFBox/src/common/types');
 const localConfig = require('../../../FFBox/src/common/localConfig').default;
+const webuiServer = require('../../../FFBox/src/backend/webuiServer').default;
+
+// 内置 webUI 端口：FFBox 后端 HTTP 默认端口为 33269，webUI 静态服务独立端口区分。
+const WEBUI_PORT = 33270;
 
 let service: FFBoxService;
 
@@ -104,6 +108,25 @@ void (async () => {
 
 	UIBridge.init(service);
 	UIBridge.listen();
+
+	// 内置 webUI：webuiServer 从固定候选路径探测 webUI/index.html。worker 线程
+	// 内 process.chdir() 不受支持（ERR_WORKER_UNSUPPORTED_OPERATION），故不依赖
+	// process.cwd()/webUI；改用其候选 path.dirname(__dirname)/renderer——worker 内
+	// __dirname=index.cjs 所在目录（解包 nodejs-project），dirname 即 filesDir，
+	// 该项固定解析为 filesDir/renderer。因此把 assets 分发的 nodejs-project/webUI
+	// 复制到 filesDir/renderer 命中该候选（见 build-mobile.mjs copyAssets）。
+	// 端口区分于后端默认 33269。
+	try {
+		const webUiSrc = path.join(__dirname, 'webUI');
+		const webUiDst = path.join(path.dirname(__dirname), 'renderer');
+		if (fs.existsSync(path.join(webUiSrc, 'index.html'))) {
+			fs.rmSync(webUiDst, { recursive: true, force: true });
+			fs.cpSync(webUiSrc, webUiDst, { recursive: true });
+		}
+		webuiServer.start(WEBUI_PORT);
+	} catch (e) {
+		console.error('webUI 启动失败', e);
+	}
 })();
 
 // --- 优雅停止 ---

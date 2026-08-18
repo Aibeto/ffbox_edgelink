@@ -8,7 +8,7 @@
  *    放置到 android assets/nodejs-project/；
  * 3. 用 esbuild 将后端打包为单文件 index.cjs（依赖全内联，
  *    utimes 替换为 no-op shim），输出到 android assets；
- * 4. 拷贝宿主 main.js 并写入 BUILD_VERSION（触发原生侧重新解包）。
+ * 4. 拷贝宿主 main.js、内置 webUI 静态资源（→ nodejs-project/renderer/）并写入 BUILD_VERSION（触发原生侧重新解包）。
  *
  * 用法：node tool/build-mobile.mjs
  * 可用环境变量：
@@ -345,6 +345,22 @@ async function buildBackend() {
 function copyAssets() {
 	mkdirSync(assetsDir, { recursive: true });
 	copyFileSync(path.join(__dirname, 'mobile', 'main.js'), path.join(assetsDir, 'main.js'));
+
+	// 内置 webUI 静态资源 → nodejs-project/webUI/：webuiServer 会依次探测若干
+	// 候选路径找 webUI/index.html，其中 process.cwd()/webUI 一项即 README 所述
+	// 「webUI 与 FFBoxService 并排放置」语义。本 worker 运行时 cwd 不可控（Android
+	// 下非 nodejs-project），故 mobile-entry 在启动 webUI 前 chdir(__dirname)（即
+	// index.cjs 所在目录），使 webUI 子目录命中该候选（见 mobile-entry 内置 webUI）。
+	const webUiSrc = path.join(repoRoot, 'service', 'webUI');
+	const webUiDst = path.join(assetsDir, 'webUI');
+	if (existsSync(path.join(webUiSrc, 'index.html'))) {
+		fs.rmSync(webUiDst, { recursive: true, force: true });
+		fs.cpSync(webUiSrc, webUiDst, { recursive: true });
+		log('webUI 静态资源已复制到 assets/nodejs-project/webUI/');
+	} else {
+		console.warn('⚠ 未找到 service/webUI/index.html，跳过 webUI（可后续放入 webUI/）');
+	}
+
 	writeFileSync(path.join(assetsDir, 'BUILD_VERSION'), new Date().toISOString());
 	log('main.js 与 BUILD_VERSION 已写入 assets');
 }
