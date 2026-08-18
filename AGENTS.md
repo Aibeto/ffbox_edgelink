@@ -38,6 +38,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 运行时分层：`main.js`（宿主，常驻：设 XDG_CONFIG_HOME/TMPDIR → 监听控制 Unix socket `filesDir/nodejs-project/nodectl.sock` → worker_threads 拉起/终止 `index.cjs`）。**引擎只启动一次且常驻**（nodejs-mobile 限制：Node 线程不可重启、process.exit 会杀整个 app 进程）；FFBox 后端跑在 worker 中，停止 = parentPort 发 stop → `taskPauseBatch` 全部活跃任务（终止 ffmpeg 防孤儿）→ `process.exit(0)`（worker 内仅结束线程，端口自动释放）→ 可再次拉起。
 - 协议（JSON Lines over Unix socket）：`{type:'start'|'stop'}` 下行指令；`{type:'log',line}` / `{type:'state',running}` 上行事件。
 - 原生侧 `LocalNodeService`（前台服务 dataSync + 通知 ID 3002）：首次启动按 `BUILD_VERSION` 解包 assets 到 filesDir；`LocalNodeChannel` 提供 MethodChannel `local_node`（startNode/stopNode/isNodeRunning）与 EventChannel `local_node_logs`（回调经 mainLooper 切主线程）。JNI 桥 `cpp/nodejni.cpp` 调 libnode 的 **`node::Start`**（C++ 符号 `_ZN4node5StartEiPPc`，CMake include 指向 `cpp/include/node`；注意 libnode.so **无** C 函数 `node_start`，写错符号名运行时直接 UnsatisfiedLinkError）。
+- 原生侧启停为**阻塞式**：`LocalNodeService.requestStart/requestStop(context, timeoutSec): Boolean` 内部 sleep 轮询等待状态（默认 40s/20s，`awaitRunning`/`awaitStopped`）。**禁止在主线程直接调用**（会 ANR），一律经 `LocalNodeChannel` 的后台线程执行后经 mainHandler 回发 MethodChannel 结果。
 - Dart 侧：`LocalNodeService`（application，状态机 + 500 行日志环形缓冲）、`LocalServiceScreen`（presentation）。服务默认端口 33269，登录页地址栏输入 `http://127.0.0.1:33269` 连接本机服务。
 - 生命周期语义：页面切换/返回登录页不影响运行（前台服务保活）；「停止服务」按钮手动停止；App 进程被 kill 时服务随之终止。
 - 已知风险：nodejs-mobile 官方 libnode.so 非 16KB page 对齐，Android 15+ 强制 16KB 的设备上可能加载失败（需自行重编译 libnode）。

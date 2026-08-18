@@ -69,7 +69,13 @@ class LocalNodeService : Service() {
         @Volatile
         var stateListener: ((Boolean) -> Unit)? = null
 
-        /** 请求启动服务（幂等），等待就绪或超时。 */
+        /**
+         * 请求启动服务（幂等，阻塞式）。
+         *
+         * ⚠️ 阻塞调用：内部 sleep 轮询等待服务就绪，至多 [timeoutSec] 秒；
+         * **禁止在 UI/主线程直接调用**（会造成 ANR），必须由后台线程调用
+         * （如 LocalNodeChannel 的后台线程）。
+         */
         fun requestStart(context: Context, timeoutSec: Long = 40): Boolean {
             val ctx = context.applicationContext
             // 引擎与服务均就绪视为成功；否则拉起前台服务走启动流程
@@ -80,7 +86,13 @@ class LocalNodeService : Service() {
             return awaitRunning(timeoutSec)
         }
 
-        /** 请求停止服务（停止 worker 与前台服务，引擎保留）。 */
+        /**
+         * 请求停止服务（阻塞式，停止 worker 与前台服务，引擎保留）。
+         *
+         * ⚠️ 阻塞调用：内部 sleep 轮询等待服务停止，至多 [timeoutSec] 秒；
+         * **禁止在 UI/主线程直接调用**（会造成 ANR），必须由后台线程调用
+         * （如 LocalNodeChannel 的后台线程）。
+         */
         fun requestStop(context: Context, timeoutSec: Long = 20): Boolean {
             val ctx = context.applicationContext
             if (!isNodeRunning) {
@@ -95,6 +107,7 @@ class LocalNodeService : Service() {
             return awaitStopped(timeoutSec)
         }
 
+        /** 轮询等待服务进入运行态（阻塞，禁止在主线程调用）。 */
         private fun awaitRunning(timeoutSec: Long): Boolean {
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec)
             while (System.nanoTime() < deadline) {
@@ -104,6 +117,7 @@ class LocalNodeService : Service() {
             return isNodeRunning
         }
 
+        /** 轮询等待服务进入停止态（阻塞，禁止在主线程调用）。 */
         private fun awaitStopped(timeoutSec: Long): Boolean {
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSec)
             while (System.nanoTime() < deadline) {

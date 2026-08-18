@@ -38,6 +38,9 @@ class LocalNodeChannel(
 
     fun register() {
         methodChannel.setMethodCallHandler { call, result ->
+            // 启停为阻塞式（requestStart/requestStop 内部 sleep 轮询等待状态，
+            // 至多数十秒），一律在后台线程执行后经主线程回发，禁止在主线程
+            // 直接调用 requestStart/requestStop（会造成 ANR）。
             Thread {
                 try {
                     val reply: Any? = when (call.method) {
