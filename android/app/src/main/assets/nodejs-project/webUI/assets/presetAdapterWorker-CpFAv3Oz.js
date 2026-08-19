@@ -1,0 +1,2 @@
+(function(){self.onmessage=e=>{let{converterScript:t,data:n}=e.data;if(typeof t!=`string`){self.postMessage({success:!1,error:`转换器脚本无效`});return}try{let e=Function(`data`,t+`; if (typeof convert === "function") return convert(data); throw new Error("未找到 convert 函数");`)(n);self.postMessage({success:!0,data:e})}catch(e){self.postMessage({success:!1,error:String(e)})}}})();
+//# sourceMappingURL=presetAdapterWorker-CpFAv3Oz.js.map

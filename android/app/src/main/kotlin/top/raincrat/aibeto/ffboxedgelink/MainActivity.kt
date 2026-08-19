@@ -4,9 +4,10 @@ import android.content.pm.PackageManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import top.raincrat.aibeto.ffboxedgelink.live.LiveActivityChannel
+import top.raincrat.aibeto.ffboxedgelink.localnode.LocalNodeChannel
 import top.raincrat.aibeto.ffboxedgelink.upload.UploadNotificationChannel
 
-// Flutter 宿主 Activity：注册实时活动与上传通知 MethodChannel，转发通知权限结果。
+// Flutter 宿主 Activity：注册实时活动、上传通知与内置服务 MethodChannel，转发通知权限结果。
 class MainActivity : FlutterActivity() {
     private lateinit var liveActivityChannel: LiveActivityChannel
     private lateinit var uploadNotificationChannel: UploadNotificationChannel
@@ -21,6 +22,10 @@ class MainActivity : FlutterActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         ).also { it.register() }
+        LocalNodeChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        ).register()
     }
 
     override fun onRequestPermissionsResult(

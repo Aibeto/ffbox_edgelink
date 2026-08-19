@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 实时活动通知：通知权限（Android 13+ 运行时申请）、提升权限（Android 16 Live Updates）与前台服务 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -6,6 +7,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 内置 FFBox 服务需读取用户选择的视频/媒体文件进行转码。
+         内置 Node 后端只能按真实路径读文件（无法读 SAF URI），故需“所有文件访问权”：
+         - API 30+ 用 MANAGE_EXTERNAL_STORAGE（经系统“所有文件访问”设置页授权）；
+         - API 23-29 用 READ_EXTERNAL_STORAGE（运行时申请，maxSdkVersion 32 覆盖
+           API 30-32 已由 MANAGE_EXTERNAL_STORAGE 涵盖）。 -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <!-- usesCleartextTraffic：后端为 HTTP 明文（非 HTTPS），Android 9+ 默认拦截。
          原生前台服务的 HttpURLConnection 轮询/按钮调用依赖此配置放行明文流量
          （Dart 端走 Flutter engine 不受此限制，故登录/列表正常，仅通知轮询失败）。 -->
@@ -18,6 +30,11 @@
         <!-- 实时活动前台服务：dataSync 类型，轮询任务进度并更新 Live Updates 通知 -->
         <service
             android:name=".live.LiveTaskService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <!-- 内置 FFBox 服务前台服务：dataSync 类型，承载 nodejs-mobile 引擎与本机后端 -->
+        <service
+            android:name=".localnode.LocalNodeService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <activity

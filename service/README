@@ -1,0 +1,2 @@
+FFBoxService 为 FFBox 转码服务程序，可直接运行。
+若要使用 webUI，请将 webUI 文件夹与 FFBoxService 并排放置，并在启动 FFBoxService 时，添加 --webuiPort [number] 参数

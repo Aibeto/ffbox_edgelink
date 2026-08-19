@@ -12,6 +12,8 @@ import 'package:ffbox_edgelink/core/utils/hash.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/screens/device_info_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/export_logs_screen.dart';
+import 'package:ffbox_edgelink/presentation/screens/local_service_screen.dart';
+import 'package:ffbox_edgelink/presentation/widgets/ak_button.dart';
 
 /// 登录页：全屏布局，上方表单输入，下方历史连接列表支持快捷登录。
 class LoginScreen extends ConsumerStatefulWidget {
@@ -248,6 +250,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 内置本地服务仅 Android arm64-v8a 可用（校准后决定是否显示入口）
+    final localNodeSupported =
+        ref.watch(localNodeSupportedProvider).value ?? false;
     return Scaffold(
       body: Stack(
         children: [
@@ -290,6 +295,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     );
                   },
                 ),
+                // 内置服务入口仅支持设备显示（Android arm64-v8a，依赖 nodejs-mobile 原生引擎）
+                if (localNodeSupported)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: _CornerButton(
+                      icon: Icons.dns_outlined,
+                      tooltip: '本地服务',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LocalServiceScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
               ],
             ),
           ),
@@ -433,7 +454,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                         // --- 提交按钮 ---
                         const SizedBox(height: 24),
-                        _AkButton(
+                        AkButton(
                           label: _loading ? null : 'LOGIN',
                           backgroundColor: AkColors.info,
                           foregroundColor: AkColors.textInverse,
@@ -744,97 +765,6 @@ class _HistoryTile extends StatelessWidget {
       ),
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// ak-ui clipped corner button
-// ---------------------------------------------------------------------------
-
-class _AkButton extends StatelessWidget {
-  final String? label;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final bool loading;
-  final VoidCallback? onPressed;
-
-  const _AkButton({
-    this.label,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    this.loading = false,
-    this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool enabled = onPressed != null;
-    final Color bgColor = enabled
-        ? backgroundColor
-        : AkColors.disabled.withValues(alpha: 0.3);
-    final Color fgColor = enabled
-        ? foregroundColor
-        : AkColors.textSecondary.withValues(alpha: 0.5);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        splashColor: Colors.transparent,
-        highlightColor: backgroundColor.withValues(alpha: 0.12),
-        child: ClipPath(
-          clipper: _TopRightCutClipper(cut: AkTheme.cornerCut),
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(color: bgColor),
-            alignment: Alignment.center,
-            child: loading
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(fgColor),
-                    ),
-                  )
-                : Text(
-                    label ?? '',
-                    style: AkTheme.sans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: fgColor,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Clipper: asymmetric top-right cut
-// ---------------------------------------------------------------------------
-
-class _TopRightCutClipper extends CustomClipper<Path> {
-  final double cut;
-
-  const _TopRightCutClipper({this.cut = AkTheme.cornerCut});
-
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width - cut, 0)
-      ..lineTo(size.width, cut)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(covariant _TopRightCutClipper oldClipper) =>
-      cut != oldClipper.cut;
 }
 
 // ---------------------------------------------------------------------------
