@@ -58,7 +58,8 @@ class LocalNodeChannel(
                         }
                     }
                     mainHandler.post { result.success(reply) }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
+                    // Throwable 而非 Exception：防御 UnsatisfiedLinkError 等 Error 子类
                     mainHandler.post { result.error("LOCAL_NODE_ERROR", e.message, null) }
                 }
             }.start()

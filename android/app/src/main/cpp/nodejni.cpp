@@ -9,16 +9,24 @@
 // node::Start 阻塞直至 Node 线程退出（引擎设计为常驻，正常情况下不返回）。
 extern "C" JNIEXPORT jint JNICALL
 Java_top_raincrat_aibeto_ffboxedgelink_localnode_LocalNodeService_startNodeWithArguments(
-        JNIEnv *env, jobject /*thiz*/, jobjectArray arguments) {
+    JNIEnv *env, jobject /*thiz*/, jobjectArray arguments)
+{
     int argc = env->GetArrayLength(arguments);
     std::vector<char *> argv;
     argv.reserve(argc);
-    for (int i = 0; i < argc; i++) {
-        auto *arg = (jstring) env->GetObjectArrayElement(arguments, i);
+    for (int i = 0; i < argc; i++)
+    {
+        auto *arg = (jstring)env->GetObjectArrayElement(arguments, i);
         const char *chars = env->GetStringUTFChars(arg, nullptr);
         argv.push_back(strdup(chars));
         env->ReleaseStringUTFChars(arg, chars);
         env->DeleteLocalRef(arg);
     }
-    return node::Start(argc, argv.data());
+    int result = node::Start(argc, argv.data());
+    // node::Start 正常不返回（引擎常驻）；异常退出返回后释放 strdup 分配的内存
+    for (char *arg : argv)
+    {
+        free(arg);
+    }
+    return result;
 }
