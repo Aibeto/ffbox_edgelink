@@ -261,6 +261,10 @@ class Task {
 
   /// 进度百分比 [0.0, 1.0]，无法计算时返回 -1。
   double get progress {
+    // 完成态强制 100%：ffmpeg 末段 time 上报可能达不到容器时长估值
+    // （远程上传媒体的 duration 偏差尤甚），按最后采样点计算的进度
+    // 会停在不足 100% 的位置（如 94%）。
+    if (status == TaskStatus.finished && durationSeconds > 0) return 1.0;
     if (durationSeconds <= 0 || processedSeconds < 0) return -1;
     return min(processedSeconds / durationSeconds, 1.0);
   }

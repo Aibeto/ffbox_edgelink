@@ -1,11 +1,12 @@
-/// 输出参数表单：视频/音频/容器三段转码配置的动态渲染。
+/// 输出参数表单：视频/音频/输出三段转码配置的动态渲染。
 ///
 /// presentation 层组件：watch codecCatalogProvider 获取「内置 + 服务端
 /// 扫描」合并目录；编码器/复用器经分组底部弹层选取；码率控制与详细参数
 /// 的交互语义对齐 FFBox web 前端 ParaBox（VcodecView/AcodecView/MuxView
 /// 与 appStore.checkAndApplyCodecDefaults：切换编码器重置默认值、切换码率
-/// 控制清理旧参数写入新默认）。提交值经 videoSection/audioSection/
-/// muxSection 暴露给宿主页面（新建任务页）。
+/// 控制清理旧参数写入新默认）。参数帮助对齐 web 悬停 tooltip 语义，因触屏
+/// 无悬停，统一以行尾「?」按钮（_HelpButton）点击弹出底部说明层承载。
+/// 提交值经 videoSection/audioSection/muxSection 暴露给宿主页面（新建任务页）。
 library;
 
 import 'dart:io' show Platform;
@@ -25,7 +26,11 @@ import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
 const Set<String> _specialCodecs = {'禁用', 'copy', '自动'};
 
 /// 常规（远程服务器）模式的默认输出文件名模板。
-const String _defaultFilePathTemplate = '[filedir]/[filename]_converted.[fileext]';
+const String _defaultFilePathTemplate =
+    '[filedir]/[filename]_converted.[fileext]';
+
+/// 文件时间保留特性说明（对齐 web MuxView 标题 tooltip）。
+const String _keepFileTimeHelp = 'FFBox 特色功能，对产出文件进行文件时间修改。对远程服务器任务暂不生效';
 
 // --- 表单组件 ---
 
@@ -82,8 +87,9 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
   /// 将默认输出模板替换为本地缓存目录绝对路径（用户已手动改动时不覆盖）。
   Future<void> _applyLocalOutputTemplate() async {
     try {
-      final template =
-          await ref.read(localOutputServiceProvider).localOutputTemplate();
+      final template = await ref
+          .read(localOutputServiceProvider)
+          .localOutputTemplate();
       if (!mounted || _mux['filePath'] != _defaultFilePathTemplate) return;
       setState(() {
         _mux['filePath'] = template;
@@ -125,7 +131,61 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
   Widget build(BuildContext context) {
     final catalogAsync = ref.watch(codecCatalogProvider);
     final catalog =
-        catalogAsync.value ?? ref.read(codecCatalogServiceProvider).builtinCatalog;
+        catalogAsync.value ??
+        ref.read(codecCatalogServiceProvider).builtinCatalog;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 目录状态头：标题 + 服务端扫描中指示 + 手动刷新
+        Row(
+          children: [
+            const Icon(Icons.tune_outlined, size: 16, color: AkColors.info),
+            const SizedBox(width: 8),
+            Text(
+              '输出配置',
+              style: AkTheme.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AkColors.textPrimary,
+              ),
+            ),
+            if (catalogAsync.isLoading) ...[
+              const SizedBox(width: 8),
+              const SizedBox(
+                width: 10,
+                height: 10,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+            ],
+            const Spacer(),
+            IconButton(
+              icon: const Icon(
+                Icons.refresh,
+                size: 16,
+                color: AkColors.textSecondary,
+              ),
+              tooltip: '从服务器刷新配置',
+              onPressed: () => ref.invalidate(codecCatalogProvider),
+            ),
+          ],
+        ),
+        _videoSection(catalog),
+        const SizedBox(height: AkTheme.cutMd),
+        _audioSection(catalog),
+        const SizedBox(height: AkTheme.cutMd),
+        _muxSection(catalog),
+      ],
+    );
+  }
+
+  // --- 分节卡片 ---
+
+  /// 分节卡片：小节头（信号色图标 + 标题）+ 内容列。
+  Widget _sectionCard({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: AkColors.panel,
@@ -137,39 +197,20 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
         children: [
           Row(
             children: [
-              const Icon(Icons.tune_outlined, size: 16, color: AkColors.info),
-              const SizedBox(width: 8),
+              Icon(icon, size: 15, color: AkColors.info),
+              const SizedBox(width: 6),
               Text(
-                '输出配置',
+                title,
                 style: AkTheme.sans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AkColors.textPrimary,
                 ),
               ),
-              if (catalogAsync.isLoading) ...[
-                const SizedBox(width: 8),
-                const SizedBox(
-                  width: 10,
-                  height: 10,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                ),
-              ],
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  Icons.refresh,
-                  size: 16,
-                  color: AkColors.textSecondary,
-                ),
-                tooltip: '从服务器刷新配置',
-                onPressed: () => ref.invalidate(codecCatalogProvider),
-              ),
             ],
           ),
-          _videoSection(catalog),
-          _audioSection(catalog),
-          _muxSection(catalog),
+          const SizedBox(height: 4),
+          ...children,
         ],
       ),
     );
@@ -179,16 +220,18 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
 
   Widget _videoSection(CodecCatalog catalog) {
     final vcodec = _video['vcodec'] as String;
-    final encoder =
-        _specialCodecs.contains(vcodec) ? null : catalog.findVideoEncoder(vcodec);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final encoder = _specialCodecs.contains(vcodec)
+        ? null
+        : catalog.findVideoEncoder(vcodec);
+    return _sectionCard(
+      icon: Icons.videocam_outlined,
+      title: '视频',
       children: [
-        _subhead('视频'),
         _PickerRow(
           label: '编码器',
           value: _codecDisplayLabel(catalog, vcodec, isVideo: true),
           onTap: () => _pickCodec(catalog, isVideo: true),
+          help: _codecHelp(catalog, vcodec, isVideo: true),
         ),
         if (encoder != null) ...[
           _dropdownRow(
@@ -196,12 +239,20 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
             resolutionList,
             _video['resolution'] as String?,
             (v) => setState(() => _video['resolution'] = v),
+            help: _selectedTooltip(
+              resolutionList,
+              _video['resolution'] as String?,
+            ),
           ),
           _dropdownRow(
             '帧率',
             framerateList,
             _video['framerate'] as String?,
             (v) => setState(() => _video['framerate'] = v),
+            help: _selectedTooltip(
+              framerateList,
+              _video['framerate'] as String?,
+            ),
           ),
           ..._rateControlRows(_video, encoder),
           ..._paramRows('video', _video, encoder.parameters, optional: false),
@@ -218,16 +269,18 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
 
   Widget _audioSection(CodecCatalog catalog) {
     final acodec = _audio['acodec'] as String;
-    final encoder =
-        _specialCodecs.contains(acodec) ? null : catalog.findAudioEncoder(acodec);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final encoder = _specialCodecs.contains(acodec)
+        ? null
+        : catalog.findAudioEncoder(acodec);
+    return _sectionCard(
+      icon: Icons.graphic_eq_outlined,
+      title: '音频',
       children: [
-        _subhead('音频'),
         _PickerRow(
           label: '编码器',
           value: _codecDisplayLabel(catalog, acodec, isVideo: false),
           onTap: () => _pickCodec(catalog, isVideo: false),
+          help: _codecHelp(catalog, acodec, isVideo: false),
         ),
         if (encoder != null) ...[
           ..._rateControlRows(_audio, encoder),
@@ -246,18 +299,24 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
   Widget _muxSection(CodecCatalog catalog) {
     final format = _mux['format'] as String? ?? '';
     final muxer = format.isEmpty ? null : catalog.findMuxer(format);
-    final filePathCtrl =
-        _controllerFor('mux.filePath', _mux['filePath'] as String? ?? '');
-    final beginCtrl = _controllerFor('mux.begin', _mux['begin'] as String? ?? '');
+    final filePathCtrl = _controllerFor(
+      'mux.filePath',
+      _mux['filePath'] as String? ?? '',
+    );
+    final beginCtrl = _controllerFor(
+      'mux.begin',
+      _mux['begin'] as String? ?? '',
+    );
     final endCtrl = _controllerFor('mux.end', _mux['end'] as String? ?? '');
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return _sectionCard(
+      icon: Icons.output_outlined,
+      title: '输出',
       children: [
-        _subhead('输出'),
         _PickerRow(
           label: '容器格式',
           value: muxer?.label ?? format,
           onTap: () => _pickMuxer(catalog),
+          help: muxer?.tooltip,
         ),
         _dropdownRow(
           '元数据保留',
@@ -270,6 +329,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               _mux['keepMetadata'] = v;
             }
           }),
+          help: _selectedTooltip(
+            keepMetadataList,
+            _mux['keepMetadata'] as String?,
+          ),
         ),
         _dropdownRow(
           '文件时间保留',
@@ -282,6 +345,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               _mux['keepFileTime'] = v;
             }
           }),
+          help: _keepFileTimeHelp,
         ),
         if (muxer != null && muxer.parameters.isNotEmpty) ...[
           ..._paramRows('mux', _mux, muxer.parameters, optional: false),
@@ -292,23 +356,25 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
         ],
         Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: TextField(
-            controller: filePathCtrl,
-            style: AkTheme.mono(fontSize: 12, color: AkColors.textPrimary),
-            decoration: const InputDecoration(
-              labelText: '输出文件名模板',
-              isDense: true,
-            ),
-            onChanged: (v) => _mux['filePath'] = v,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          filePathTemplateHint,
-          style: AkTheme.sans(
-            fontSize: 10,
-            color: AkColors.textSecondary,
-            height: 1.5,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: filePathCtrl,
+                  style: AkTheme.mono(
+                    fontSize: 12,
+                    color: AkColors.textPrimary,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: '输出文件名模板',
+                    isDense: true,
+                  ),
+                  onChanged: (v) => _mux['filePath'] = v,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const _HelpButton(title: '输出文件名模板', help: filePathTemplateHint),
+            ],
           ),
         ),
         _advancedTile([
@@ -349,9 +415,51 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
 
   // --- 编码器/复用器选择 ---
 
+  /// 当前编码器（含特殊值）的帮助文案，对齐 web 菜单项 tooltip；
+  /// 「自动」动态拼接当前复用器的默认编码器说明。
+  String? _codecHelp(
+    CodecCatalog catalog,
+    String value, {
+    required bool isVideo,
+  }) {
+    switch (value) {
+      case '禁用':
+        return '''不输出${isVideo ? '视频' : '音频'}
+（如果输入中本来就没有${isVideo ? '视频' : '音频'}，
+或者输出容器中不支持${isVideo ? '视频' : '音频'}，
+ffmpeg 会自动忽略相关选项，您无需手动选择此处）''';
+      case 'copy':
+        return '复制源码流，不重新编码。';
+      case '自动':
+        final format = _mux['format'] as String? ?? '';
+        final muxer = catalog.findMuxer(format);
+        final def = isVideo
+            ? muxer?.defaultVideoCodec
+            : muxer?.defaultAudioCodec;
+        if (def != null && def.isNotEmpty) {
+          return '不指定，让 ffmpeg 根据复用器默认设定选择编码\n'
+              '根据你选择的复用器【$format】，默认使用【$def】编码器';
+        }
+        return '不指定，由 FFmpeg 根据复用器默认设定选择编码器';
+      default:
+        return isVideo
+            ? catalog.findVideoEncoder(value)?.tooltip
+            : catalog.findAudioEncoder(value)?.tooltip;
+    }
+  }
+
+  /// 下拉当前选中项的帮助文案（对齐 web 菜单项悬停 tooltip）。
+  String? _selectedTooltip(List<OptionItem> items, String? value) {
+    if (value == null) return null;
+    return items.where((i) => i.value == value).firstOrNull?.tooltip;
+  }
+
   /// 当前编码器显示文案（特殊值映射 + 自动标注复用器默认编码器）。
-  String _codecDisplayLabel(CodecCatalog catalog, String value,
-      {required bool isVideo}) {
+  String _codecDisplayLabel(
+    CodecCatalog catalog,
+    String value, {
+    required bool isVideo,
+  }) {
     switch (value) {
       case '禁用':
         return '禁用';
@@ -359,34 +467,46 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
         return '不重新编码';
       case '自动':
         final muxer = catalog.findMuxer(_mux['format'] as String? ?? '');
-        final def = isVideo ? muxer?.defaultVideoCodec : muxer?.defaultAudioCodec;
+        final def = isVideo
+            ? muxer?.defaultVideoCodec
+            : muxer?.defaultAudioCodec;
         return def != null && def.isNotEmpty ? '自动【$def】' : '自动';
       default:
-        final encoder =
-            isVideo ? catalog.findVideoEncoder(value) : catalog.findAudioEncoder(value);
+        final encoder = isVideo
+            ? catalog.findVideoEncoder(value)
+            : catalog.findAudioEncoder(value);
         return encoder?.label ?? value;
     }
   }
 
   Future<void> _pickCodec(CodecCatalog catalog, {required bool isVideo}) async {
     final muxer = catalog.findMuxer(_mux['format'] as String? ?? '');
-    final defaultCodec =
-        isVideo ? muxer?.defaultVideoCodec : muxer?.defaultAudioCodec;
+    final defaultCodec = isVideo
+        ? muxer?.defaultVideoCodec
+        : muxer?.defaultAudioCodec;
     final groups = <_PickerGroup>[
       _PickerGroup('特殊', [
-        OptionItem('禁用', '禁用', '不输出${isVideo ? '视频' : '音频'}'),
-        const OptionItem('copy', '不重新编码', '复制源码流，不重新编码。'),
+        OptionItem('禁用', '禁用', _codecHelp(catalog, '禁用', isVideo: isVideo)),
+        OptionItem(
+          'copy',
+          '不重新编码',
+          _codecHelp(catalog, 'copy', isVideo: isVideo),
+        ),
         OptionItem(
           '自动',
-          defaultCodec != null && defaultCodec.isNotEmpty ? '自动【$defaultCodec】' : '自动',
-          '不指定，由 FFmpeg 根据复用器默认设定选择编码器',
+          defaultCodec != null && defaultCodec.isNotEmpty
+              ? '自动【$defaultCodec】'
+              : '自动',
+          _codecHelp(catalog, '自动', isVideo: isVideo),
         ),
       ]),
-      for (final f in isVideo
-          ? catalog.builtinVideoFamilies
-          : catalog.builtinAudioFamilies)
+      for (final f
+          in isVideo
+              ? catalog.builtinVideoFamilies
+              : catalog.builtinAudioFamilies)
         _PickerGroup(f.label, [
-          for (final e in f.encoders) OptionItem(e.name, e.label ?? e.name, e.tooltip),
+          for (final e in f.encoders)
+            OptionItem(e.name, e.label ?? e.name, e.tooltip),
         ]),
       ..._serverEncoderGroups(catalog, isVideo: isVideo),
     ];
@@ -417,18 +537,22 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
   }
 
   /// 服务端扫描编码族 → 去重（内置已有同名编码器）后的「全部可用编码」分组。
-  List<_PickerGroup> _serverEncoderGroups(CodecCatalog catalog,
-      {required bool isVideo}) {
+  List<_PickerGroup> _serverEncoderGroups(
+    CodecCatalog catalog, {
+    required bool isVideo,
+  }) {
     final builtinNames = <String>{
-      for (final f in isVideo
-          ? catalog.builtinVideoFamilies
-          : catalog.builtinAudioFamilies)
+      for (final f
+          in isVideo
+              ? catalog.builtinVideoFamilies
+              : catalog.builtinAudioFamilies)
         for (final e in f.encoders) e.name,
     };
     final groups = <_PickerGroup>[];
-    for (final f in isVideo
-        ? catalog.serverVideoFamilies
-        : catalog.serverAudioFamilies) {
+    for (final f
+        in isVideo
+            ? catalog.serverVideoFamilies
+            : catalog.serverAudioFamilies) {
       final items = [
         for (final e in f.encoders)
           if (!builtinNames.contains(e.name))
@@ -587,14 +711,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           if (rc.tooltip != null)
             Padding(
               padding: const EdgeInsets.only(left: 4),
-              child: Tooltip(
-                message: rc.tooltip!,
-                child: const Icon(
-                  Icons.help_outline,
-                  size: 14,
-                  color: AkColors.textSecondary,
-                ),
-              ),
+              child: _HelpButton(title: '码率控制', help: rc.tooltip!),
             ),
         ],
       ),
@@ -615,7 +732,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           detail.remove(name);
         }
       }
-      final rc = rcs.firstWhere((r) => r.value == value, orElse: () => rcs.first);
+      final rc = rcs.firstWhere(
+        (r) => r.value == value,
+        orElse: () => rcs.first,
+      );
       section['ratecontrol'] = rc.value;
       detail.addAll(rc.defaultDetail);
     });
@@ -685,6 +805,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           detail[p.parameter] as String?,
           (v) => setState(() => detail[p.parameter] = v),
           unsetLabel: '（未设置）',
+          // 参数级 description 优先，缺失时回退选中项 tooltip（web 菜单悬停）
+          help:
+              _nonEmpty(p.description) ??
+              _selectedTooltip(p.items, detail[p.parameter] as String?),
         );
       case ParamMode.slider:
         return _paramSliderRow(section, p);
@@ -699,6 +823,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               detail.remove(p.parameter);
             }
           }),
+          help: _nonEmpty(p.description),
         );
       case ParamMode.text:
         final controller = _controllerFor(
@@ -707,20 +832,33 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
         );
         return Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: TextField(
-            controller: controller,
-            style: AkTheme.mono(fontSize: 12, color: AkColors.textPrimary),
-            decoration: InputDecoration(
-              labelText: p.display,
-              isDense: true,
-            ),
-            onChanged: (v) {
-              if (v.isEmpty) {
-                detail.remove(p.parameter);
-              } else {
-                detail[p.parameter] = v;
-              }
-            },
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  style: AkTheme.mono(
+                    fontSize: 12,
+                    color: AkColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: p.display,
+                    isDense: true,
+                  ),
+                  onChanged: (v) {
+                    if (v.isEmpty) {
+                      detail.remove(p.parameter);
+                    } else {
+                      detail[p.parameter] = v;
+                    }
+                  },
+                ),
+              ),
+              if (_nonEmpty(p.description) != null) ...[
+                const SizedBox(width: 4),
+                _HelpButton(title: p.display, help: p.description!),
+              ],
+            ],
           ),
         );
     }
@@ -752,6 +890,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           final i = v.round().clamp(0, tags.length - 1);
           detail[p.parameter] = tags[i].label;
         }),
+        help: _nonEmpty(p.description),
       );
     }
     final min = p.min ?? 0;
@@ -776,12 +915,16 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
       onChanged: (nv) => setState(() {
         detail[p.parameter] = _numValue(nv);
       }),
+      help: _nonEmpty(p.description),
     );
   }
 
   /// 自定义参数输入（追加到 ffmpeg 命令行）。
   Widget _customRow(String sectionKey, Map<String, dynamic> section) {
-    final controller = _controllerFor('$sectionKey.custom', '${section['custom'] ?? ''}');
+    final controller = _controllerFor(
+      '$sectionKey.custom',
+      '${section['custom'] ?? ''}',
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: TextField(
@@ -805,46 +948,45 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
 
   // --- 通用行组件 ---
 
-  Widget _subhead(String text) => Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 4),
-        child: Text(
-          text,
+  /// 空串归一为 null（目录中大量 tooltip 为空字符串，等价于无帮助）。
+  static String? _nonEmpty(String? s) => (s != null && s.isNotEmpty) ? s : null;
+
+  /// 高级选项折叠区。ExpansionTile 内部为 ListTile，须以透明 Material
+  /// 包裹：否则 ListTile 的水墨效果绘制在分节卡片的 DecoratedBox 之下，
+  /// 触发「ink splashes may be invisible」断言。
+  Widget _advancedTile(List<Widget> children) => Theme(
+    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+    child: Material(
+      color: Colors.transparent,
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        dense: true,
+        initiallyExpanded: false,
+        title: Text(
+          '高级选项',
           style: AkTheme.sans(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: AkColors.textSecondary,
           ),
         ),
-      );
-
-  Widget _advancedTile(List<Widget> children) => Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: EdgeInsets.zero,
-          dense: true,
-          initiallyExpanded: false,
-          title: Text(
-            '高级选项',
-            style: AkTheme.sans(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AkColors.textSecondary,
-            ),
-          ),
-          iconColor: AkColors.textSecondary,
-          collapsedIconColor: AkColors.textSecondary,
-          children: children,
-        ),
-      );
+        iconColor: AkColors.textSecondary,
+        collapsedIconColor: AkColors.textSecondary,
+        children: children,
+      ),
+    ),
+  );
 
   /// 下拉行：标签 + OptionItem 下拉；当前值不在候选项时以 hint 展示。
+  /// [help] 非空时行尾显示「?」帮助按钮。
   Widget _dropdownRow(
     String label,
     List<OptionItem> items,
     String? currentValue,
     ValueChanged<String> onChanged, {
     String? unsetLabel,
+    String? help,
   }) {
     final selected = currentValue == null
         ? null
@@ -867,7 +1009,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               dropdownColor: AkColors.raised,
               style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
               underline: const SizedBox.shrink(),
-              hint: selected == null && currentValue != null && currentValue.isNotEmpty
+              hint:
+                  selected == null &&
+                      currentValue != null &&
+                      currentValue.isNotEmpty
                   ? Text(
                       currentValue,
                       style: AkTheme.mono(
@@ -877,14 +1022,14 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
                       overflow: TextOverflow.ellipsis,
                     )
                   : (selected == null && unsetLabel != null
-                      ? Text(
-                          unsetLabel,
-                          style: AkTheme.sans(
-                            fontSize: 12,
-                            color: AkColors.textSecondary,
-                          ),
-                        )
-                      : null),
+                        ? Text(
+                            unsetLabel,
+                            style: AkTheme.sans(
+                              fontSize: 12,
+                              color: AkColors.textSecondary,
+                            ),
+                          )
+                        : null),
               items: [
                 for (final i in items)
                   DropdownMenuItem(
@@ -892,7 +1037,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
                     child: Text(
                       i.label,
                       overflow: TextOverflow.ellipsis,
-                      style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
+                      style: AkTheme.sans(
+                        fontSize: 13,
+                        color: AkColors.textPrimary,
+                      ),
                     ),
                   ),
               ],
@@ -901,12 +1049,23 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               },
             ),
           ),
+          if (help != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: _HelpButton(title: label, help: help),
+            ),
         ],
       ),
     );
   }
 
-  Widget _switchRow(String label, bool value, ValueChanged<bool> onChanged) {
+  /// 开关行：标签 + Switch；[help] 非空时行尾显示「?」帮助按钮。
+  Widget _switchRow(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged, {
+    String? help,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -917,6 +1076,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
               style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
             ),
           ),
+          if (help != null) _HelpButton(title: label, help: help),
           Switch(value: value, onChanged: onChanged),
         ],
       ),
@@ -933,16 +1093,93 @@ dynamic _numValue(double v) => v == v.roundToDouble() ? v.round() : v;
 
 // --- 私有行组件 ---
 
-/// 编码器/容器选择行：标签 + 当前值 + 展开箭头，点击弹分组选择器。
+/// 参数帮助按钮：以「?」入口替代 web 悬停 tooltip，点击弹出底部说明层。
+class _HelpButton extends StatelessWidget {
+  final String title;
+  final String help;
+
+  const _HelpButton({required this.title, required this.help});
+
+  Future<void> _show(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AkColors.raised,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(AkTheme.cutMd),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AkTheme.sans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AkColors.textPrimary,
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(sheetContext).pop(),
+                  child: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AkColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              help,
+              style: AkTheme.sans(
+                fontSize: 12,
+                color: AkColors.textSecondary,
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: InkWell(
+        onTap: () => _show(context),
+        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+        child: const Icon(
+          Icons.help_outline,
+          size: 15,
+          color: AkColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+/// 编码器/容器选择行：标签 + 当前值 + 展开箭头，点击弹分组选择器；
+/// [help] 非空时行尾显示「?」帮助按钮。
 class _PickerRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback onTap;
+  final String? help;
 
   const _PickerRow({
     required this.label,
     required this.value,
     required this.onTap,
+    this.help,
   });
 
   @override
@@ -964,13 +1201,11 @@ class _PickerRow extends StatelessWidget {
             Expanded(
               child: Text(
                 value,
-                style: AkTheme.mono(
-                  fontSize: 13,
-                  color: AkColors.textPrimary,
-                ),
+                style: AkTheme.mono(fontSize: 13, color: AkColors.textPrimary),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (help != null) _HelpButton(title: label, help: help!),
             const Icon(
               Icons.expand_more,
               size: 16,
@@ -983,7 +1218,8 @@ class _PickerRow extends StatelessWidget {
   }
 }
 
-/// 滑杆行：标题 + Slider + 当前值；tags 为滑杆下方按位置排布的档位提示。
+/// 滑杆行：标题 + Slider + 当前值；tags 为滑杆下方按位置排布的档位提示；
+/// [help] 非空时行尾显示「?」帮助按钮。
 class _SliderRow extends StatelessWidget {
   final String title;
   final double value;
@@ -992,6 +1228,7 @@ class _SliderRow extends StatelessWidget {
   final String Function(double) display;
   final List<(double, String)> tags;
   final ValueChanged<double> onChanged;
+  final String? help;
 
   const _SliderRow({
     required this.title,
@@ -1001,6 +1238,7 @@ class _SliderRow extends StatelessWidget {
     required this.display,
     required this.onChanged,
     this.tags = const [],
+    this.help,
   });
 
   @override
@@ -1043,6 +1281,7 @@ class _SliderRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (help != null) _HelpButton(title: title, help: help!),
           ],
         ),
         if (tags.isNotEmpty) _tagLabels(),
@@ -1053,7 +1292,11 @@ class _SliderRow extends StatelessWidget {
   /// 档位提示行：按位置比例排布（滑杆区对齐，避开右侧数值区）。
   Widget _tagLabels() {
     return Padding(
-      padding: const EdgeInsets.only(left: 84, right: 84, top: 2),
+      padding: EdgeInsets.only(
+        left: 84,
+        right: help != null ? 110 : 84,
+        top: 2,
+      ),
       child: SizedBox(
         height: 14,
         child: Stack(

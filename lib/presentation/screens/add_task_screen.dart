@@ -1,6 +1,7 @@
-/// 远程新建任务页：选择本机视频文件 + 基础输出配置，
-/// 提交后先以占位符创建任务再入队后台上传。
+/// 远程新建任务页：选择本机视频文件 + 输出配置 + 提交。
 ///
+/// 顶部 _ModeBanner 提示当前创建模式（本机直连 / 远程上传 / 权限受限）；
+/// 上传托管模式下提交后先以占位符创建任务再入队后台上传。
 /// presentation 层页面，依赖全局 uploadQueueProvider（生命周期
 /// 独立于本页），离开页面后上传继续进行。
 library;
@@ -92,8 +93,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     final session = ref.read(sessionProvider);
     return LocalOutputService.useDirectPaths(
       baseUrl: ref.read(appConfigProvider).normalizedBaseUrl,
-      hasFileSystemPermission:
-          session?.hasFileSystemPermission ?? false,
+      hasFileSystemPermission: session?.hasFileSystemPermission ?? false,
     );
   }
 
@@ -171,9 +171,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             .read(taskRepositoryProvider)
             .createTasks(filePaths, outputParams);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已创建任务，可在任务列表启动')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已创建任务，可在任务列表启动')));
         Navigator.of(context).pop();
         return;
       }
@@ -192,16 +192,16 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         );
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已创建任务并开始上传，可离开页面')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已创建任务并开始上传，可离开页面')));
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (!mounted) return;
       // 401 交给列表页轮询登出；此处提示后返回
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.friendlyMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.friendlyMessage)));
       if (e.isUnauthorized) Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -232,7 +232,17 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AkTheme.cutMd),
         children: [
-          _FilePickerCard(onPick: _pickFiles, files: _files, onRemove: _remove),
+          _ModeBanner(
+            directMode: _directMode,
+            blocked: _blockedByPrivilegedRemote,
+          ),
+          const SizedBox(height: AkTheme.cutMd),
+          _FilePickerCard(
+            onPick: _pickFiles,
+            files: _files,
+            onRemove: _remove,
+            onClear: _files.isEmpty ? null : () => setState(_files.clear),
+          ),
           const SizedBox(height: AkTheme.cutMd),
           OutputParamsForm(key: _formKey),
           const SizedBox(height: AkTheme.cutMd),
@@ -266,7 +276,8 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                     ),
                   )
                 : Text(
-                    _directMode ? '添加任务' : '添加并上传',
+                    '${_directMode ? '添加任务' : '添加并上传'}'
+                    '${_files.isEmpty ? '' : '（${_files.length} 个文件）'}',
                     style: AkTheme.sans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -280,32 +291,97 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   }
 }
 
+// --- 创建模式横幅 ---
+
+/// 任务创建模式提示：权限受限（阻止上传）/ 本机直连 / 远程上传三态。
+class _ModeBanner extends StatelessWidget {
+  final bool directMode;
+  final bool blocked;
+
+  const _ModeBanner({required this.directMode, required this.blocked});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, icon, text) = blocked
+        ? (
+            AkColors.action,
+            Icons.block_outlined,
+            '当前账号具有文件系统权限，服务端会以原路径创建任务，'
+                '无法通过上传新建任务。请在本机服务（127.0.0.1）下新建，'
+                '或更换无文件系统权限的账号。',
+          )
+        : directMode
+        ? (
+            AkColors.success,
+            Icons.dns_outlined,
+            '本机服务直连：任务将以设备上的真实路径创建，无需上传文件，'
+                '创建后可在任务列表启动。',
+          )
+        : (
+            AkColors.info,
+            Icons.cloud_upload_outlined,
+            '远程上传：文件将分片上传至服务器后创建转码任务，'
+                '提交后可离开此页面，上传在后台进行。',
+          );
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border(
+          left: BorderSide(color: color, width: AkTheme.signalBorder),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AkTheme.sans(
+                fontSize: 11,
+                color: AkColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // --- 文件选择卡片 ---
 
-/// 输入文件卡片：选择按钮 + 已选文件列表（名称/大小/移除）。
+/// 字节数的人类可读表示（十进制 KB/MB/GB）。
+String _humanSize(int bytes) {
+  if (bytes >= 1000 * 1000 * 1000) {
+    return '${(bytes / 1000 / 1000 / 1000).toStringAsFixed(2)} GB';
+  }
+  if (bytes >= 1000 * 1000) {
+    return '${(bytes / 1000 / 1000).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / 1000).toStringAsFixed(0)} KB';
+}
+
+/// 输入文件卡片：选择按钮 + 汇总（数量/总大小）+ 清空 + 已选文件列表。
 class _FilePickerCard extends StatelessWidget {
   final VoidCallback onPick;
   final List<({String path, String name, int size})> files;
   final void Function(String path) onRemove;
+  final VoidCallback? onClear;
 
   const _FilePickerCard({
     required this.onPick,
     required this.files,
     required this.onRemove,
+    this.onClear,
   });
-
-  String _humanSize(int bytes) {
-    if (bytes >= 1000 * 1000 * 1000) {
-      return '${(bytes / 1000 / 1000 / 1000).toStringAsFixed(2)} GB';
-    }
-    if (bytes >= 1000 * 1000) {
-      return '${(bytes / 1000 / 1000).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / 1000).toStringAsFixed(0)} KB';
-  }
 
   @override
   Widget build(BuildContext context) {
+    final totalSize = files.fold<int>(0, (sum, f) => sum + f.size);
     return Container(
       decoration: BoxDecoration(
         color: AkColors.panel,
@@ -315,6 +391,7 @@ class _FilePickerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 头部：标题 + 选择/追加按钮
           Row(
             children: [
               const Icon(Icons.movie_outlined, size: 16, color: AkColors.info),
@@ -332,49 +409,162 @@ class _FilePickerCard extends StatelessWidget {
                 onPressed: onPick,
                 icon: const Icon(Icons.add, size: 16, color: AkColors.info),
                 label: Text(
-                  '选择文件',
+                  files.isEmpty ? '选择文件' : '添加文件',
                   style: AkTheme.sans(fontSize: 13, color: AkColors.info),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 4),
           if (files.isEmpty)
-            Text(
-              '从本设备选择要转码的视频文件',
-              style: AkTheme.sans(fontSize: 12, color: AkColors.textSecondary),
-            )
-          else
-            for (final f in files)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      f.name,
-                      style: AkTheme.sans(
-                        fontSize: 13,
-                        color: AkColors.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _humanSize(f.size),
+            _EmptyPicker(onPick: onPick)
+          else ...[
+            // 汇总行：数量 + 总大小 + 清空
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '已选 ${files.length} 个文件 · 共 ${_humanSize(totalSize)}',
                     style: AkTheme.mono(
                       fontSize: 11,
                       color: AkColors.textSecondary,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      size: 16,
+                ),
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(
+                    Icons.delete_sweep_outlined,
+                    size: 14,
+                    color: AkColors.textSecondary,
+                  ),
+                  label: Text(
+                    '清空',
+                    style: AkTheme.sans(
+                      fontSize: 12,
                       color: AkColors.textSecondary,
                     ),
-                    onPressed: () => onRemove(f.path),
                   ),
-                ],
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+            for (final f in files)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _FileRow(
+                  name: f.name,
+                  size: f.size,
+                  onRemove: () => onRemove(f.path),
+                ),
               ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 空状态选择区：整块可点击，提示选择视频文件。
+class _EmptyPicker extends StatelessWidget {
+  final VoidCallback onPick;
+
+  const _EmptyPicker({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(AkTheme.cutSm),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: AkColors.muted.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(AkTheme.cutSm),
+          border: Border.all(color: AkColors.border, width: AkTheme.hairline),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.add_circle_outline,
+              size: 26,
+              color: AkColors.textSecondary,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '点击选择要转码的视频文件',
+              style: AkTheme.sans(fontSize: 12, color: AkColors.textSecondary),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '支持多选 · 可分批添加',
+              style: AkTheme.sans(
+                fontSize: 10,
+                color: AkColors.textSecondary.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 单个已选文件行：静默面板芯片（图标 + 名称 + 大小 + 移除）。
+class _FileRow extends StatelessWidget {
+  final String name;
+  final int size;
+  final VoidCallback onRemove;
+
+  const _FileRow({
+    required this.name,
+    required this.size,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: AkColors.muted.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.videocam_outlined,
+            size: 14,
+            color: AkColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              name,
+              style: AkTheme.sans(fontSize: 12, color: AkColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _humanSize(size),
+            style: AkTheme.mono(fontSize: 11, color: AkColors.textSecondary),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onRemove,
+            borderRadius: BorderRadius.circular(AkTheme.cutSm),
+            child: const Icon(
+              Icons.close,
+              size: 14,
+              color: AkColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -383,13 +573,13 @@ class _FilePickerCard extends StatelessWidget {
 
 // --- 队列状态区 ---
 
-/// 后台上传队列状态列表：每项显示状态/进度，失败项可重试。
+/// 后台上传队列状态列表：每项显示状态/进度/速度与细进度条，失败项可重试。
 class _QueueSection extends ConsumerWidget {
   final UploadQueueSnapshot snapshot;
 
   const _QueueSection({required this.snapshot});
 
-  String _stateLabel(UploadItemState state) {
+  static String _stateLabel(UploadItemState state) {
     switch (state) {
       case UploadItemState.pending:
         return '排队中';
@@ -427,48 +617,85 @@ class _QueueSection extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           for (final item in snapshot.items)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    item.fileBaseName,
-                    style: AkTheme.sans(
-                      fontSize: 12,
-                      color: AkColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  item.state == UploadItemState.error
-                      ? (item.error ?? '失败')
-                      : item.state == UploadItemState.done
-                      ? '已完成'
-                      : '${_stateLabel(item.state)} ${item.size > 0 ? (item.transferredBytes * 100 / item.size).clamp(0, 100).toStringAsFixed(0) : 0}%',
-                  style: AkTheme.mono(
-                    fontSize: 11,
-                    color: item.state == UploadItemState.error
-                        ? AkColors.danger
-                        : item.state == UploadItemState.done
-                        ? AkColors.success
-                        : AkColors.textSecondary,
-                  ),
-                ),
-                if (item.state == UploadItemState.error)
-                  TextButton(
-                    onPressed: () => ref
-                        .read(uploadQueueProvider)
-                        .retryItem(item.taskId),
-                    child: Text(
-                      '重试',
-                      style: AkTheme.sans(fontSize: 12, color: AkColors.info),
-                    ),
-                  ),
-              ],
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: _QueueItemRow(item: item),
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 单个队列项：名称 + 状态（进度/速度/错误）+ 重试 + 活跃项细进度条。
+class _QueueItemRow extends ConsumerWidget {
+  final UploadItem item;
+
+  const _QueueItemRow({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final percent = item.size > 0
+        ? (item.transferredBytes * 100 / item.size).clamp(0, 100)
+        : 0.0;
+    final active =
+        item.state == UploadItemState.pending ||
+        item.state == UploadItemState.hashing ||
+        item.state == UploadItemState.uploading ||
+        item.state == UploadItemState.merging;
+    final speedText =
+        item.state == UploadItemState.uploading && item.speedBps > 0
+        ? ' · ${(item.speedBps / 1000 / 1000).toStringAsFixed(1)} MB/s'
+        : '';
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                item.fileBaseName,
+                style: AkTheme.sans(fontSize: 12, color: AkColors.textPrimary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              item.state == UploadItemState.error
+                  ? (item.error ?? '失败')
+                  : item.state == UploadItemState.done
+                  ? '已完成'
+                  : '${_QueueSection._stateLabel(item.state)} ${percent.toStringAsFixed(0)}%$speedText',
+              style: AkTheme.mono(
+                fontSize: 11,
+                color: item.state == UploadItemState.error
+                    ? AkColors.danger
+                    : item.state == UploadItemState.done
+                    ? AkColors.success
+                    : AkColors.textSecondary,
+              ),
+            ),
+            if (item.state == UploadItemState.error)
+              TextButton(
+                onPressed: () =>
+                    ref.read(uploadQueueProvider).retryItem(item.taskId),
+                child: Text(
+                  '重试',
+                  style: AkTheme.sans(fontSize: 12, color: AkColors.info),
+                ),
+              ),
+          ],
+        ),
+        if (active)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: LinearProgressIndicator(
+              value: percent / 100,
+              minHeight: 2,
+              backgroundColor: AkColors.muted,
+              valueColor: const AlwaysStoppedAnimation<Color>(AkColors.info),
+            ),
+          ),
+      ],
     );
   }
 }

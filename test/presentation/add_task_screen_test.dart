@@ -109,8 +109,13 @@ void main() {
         child: const MaterialApp(home: AddTaskScreen()),
       ),
     );
-    expect(find.text('视频编码器'), findsOneWidget);
-    expect(find.text('输出格式'), findsOneWidget);
+    // 等待编码目录请求（Dio 内部 Timer）完成并回退内置目录
+    await tester.pumpAndSettle();
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('音频'), findsOneWidget);
+    expect(find.text('输出'), findsOneWidget);
+    expect(find.text('编码器'), findsNWidgets(2));
+    expect(find.text('容器格式'), findsOneWidget);
     expect(find.text('添加并上传'), findsOneWidget);
     // 无文件时按钮禁用
     final button = tester.widget<ElevatedButton>(
@@ -119,8 +124,7 @@ void main() {
     expect(button.onPressed, isNull);
   });
 
-  testWidgets('初始文件可移除，提交发送占位符与配置并调用 createTasks',
-      (tester) async {
+  testWidgets('初始文件可移除，提交发送占位符与配置并调用 createTasks', (tester) async {
     final taskRepo = _FakeTaskRepo();
     final uploadRepo = _FakeUploadRepo();
     await tester.pumpWidget(
@@ -132,23 +136,26 @@ void main() {
         ],
         child: const MaterialApp(
           home: AddTaskScreen(
-            initialFiles: [
-              (path: '/tmp/a.mp4', name: 'a.mp4', size: 1024),
-            ],
+            initialFiles: [(path: '/tmp/a.mp4', name: 'a.mp4', size: 1024)],
           ),
         ),
       ),
     );
     expect(find.text('a.mp4'), findsOneWidget);
+    expect(find.text('已选 1 个文件 · 共 1 KB'), findsOneWidget);
 
-    await tester.tap(find.text('添加并上传'));
+    await tester.tap(find.text('添加并上传（1 个文件）'));
     await tester.pumpAndSettle();
 
     expect(taskRepo.lastFilePaths, ['[uploading] a.mp4']);
-    expect(taskRepo.lastOutputParams!['outputs'][0]['video']['vcodec'],
-        'libx265');
     expect(
-        taskRepo.lastOutputParams!['outputs'][0]['video']['detail']['crf'], 24);
+      taskRepo.lastOutputParams!['outputs'][0]['video']['vcodec'],
+      'libx265',
+    );
+    expect(
+      taskRepo.lastOutputParams!['outputs'][0]['video']['detail']['crf'],
+      24,
+    );
     expect(taskRepo.lastOutputParams!['outputs'][0]['mux']['format'], 'mp4');
   });
 }

@@ -357,6 +357,13 @@ class LiveTaskService : Service() {
             }
         }
 
+        // 完成态强制 100%：ffmpeg 末段 time 上报可能达不到容器时长估值
+        // （远程上传媒体的 duration 偏差尤甚），末条采样计算的进度会停在
+        // 不足 100% 的位置（与 Dart Task.progress 语义一致，须两侧同步）
+        if (status == "finished" && total > 0) {
+            processed = total
+        }
+
         val remaining = if (processed > 0 && total > processed) {
             (elapsed.toDouble() * (total - processed) / processed).toInt()
         } else -1

@@ -8,8 +8,10 @@ import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/core/analytics/clarity_analytics.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
+import 'package:ffbox_edgelink/application/local_node/local_output_service.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/screens/add_task_screen.dart';
+import 'package:ffbox_edgelink/presentation/screens/local_service_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/server_settings_screen.dart';
 import 'package:ffbox_edgelink/presentation/screens/task_detail_screen.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
@@ -145,9 +147,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   void _openAddTask() {
     logDebug('taskListUI: 打开新建任务');
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AddTaskScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AddTaskScreen()));
   }
 
   // --- 任务操作 ---
@@ -163,9 +165,26 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   void _openSettings() {
     logDebug('taskListUI: 打开服务端配置');
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ServerSettingsScreen()));
+  }
+
+  /// 当前连接为本机回环（内置服务）且设备支持内置服务时，
+  /// 连接失败后可快捷跳转本地服务页排查/启动服务。
+  bool get _showLocalServiceEntry {
+    final supported = ref.read(localNodeSupportedProvider).value ?? false;
+    return supported &&
+        LocalOutputService.isLoopbackUrl(
+          ref.read(appConfigProvider).normalizedBaseUrl,
+        );
+  }
+
+  void _openLocalService() {
+    logDebug('taskListUI: 打开本地服务');
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LocalServiceScreen()));
   }
 
   String _hostOf(String? baseUrl) {
@@ -383,6 +402,37 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                         ),
                       ),
                     ),
+                    if (_showLocalServiceEntry) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _openLocalService,
+                        icon: const Icon(
+                          Icons.dns_outlined,
+                          size: 16,
+                          color: AkColors.action,
+                        ),
+                        label: Text(
+                          '打开本地服务',
+                          style: AkTheme.sans(
+                            fontSize: 13,
+                            color: AkColors.action,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          backgroundColor: AkColors.action.withValues(
+                            alpha: 0.1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -621,9 +671,9 @@ class _UploadBanner extends ConsumerWidget {
       key: const Key('upload_banner'),
       color: AkColors.info.withValues(alpha: 0.12),
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddTaskScreen()),
-        ),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AddTaskScreen())),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

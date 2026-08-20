@@ -24,6 +24,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 任务操作均为批量接口（`/start`、`/pause`、`/resume`、`/delete`、`/ready`、`/reset`），请求体 `{ids: [...]}`。
 - Task 结构：`{id, taskName, before: InputInfo[], status, runs: Run[]}`；`elapsed/errorInfo/outputFiles` 在 Run 上，不在 Task 顶层。
 - 客户端取「当前 run」必须与后端 `getCurrentRun` 语义一致：runs 数组只追加（reset 追加新 run），从**后往前**取第一条活跃态（running/paused/paused_queued/stopping/finishing/**error**）run，无则回退最新一条；禁止从前向后取第一个非 idle 的 run，否则会命中历史出错/完成的旧 run 导致状态停滞。活跃态**包含 error**：修正 error 任务后 reset 追加新 idle run，若回退到 idle run 会丢失错误信息，须保留旧 error run 直到新 run 真正运行（running 等）才被覆盖。错误信息展示：详情页 `errorInfo` 非空即显示错误卡片（标题按 `task.status == error` 区分「错误信息」/「任务历史报错」）；列表页仍按 `task.status == error` 门控。
+- **进度完成态强制 100%**：ffmpeg 末段 `progressLog.time` 上报可能达不到容器时长估值（远程上传媒体 duration 偏差尤甚），按末条采样计算的进度会停在不足 100% 的位置（如 94%）。Dart `Task.progress`（`status == finished && durationSeconds > 0` → 1.0）与 Kotlin `LiveTaskService.parseTask`（`processed = total`）**两侧必须同步维护**此语义。
 - 写操作「查询确认」优先于盲目重试：超时后重查状态确认结果，返回三态（成功/失败/未知）。
 - 网络：连接/发送/接收超时 + 幂等 GET 有限重试；错误统一经 `ApiException` 分类给友好文案，容忍单通与丢包。
 
@@ -59,7 +60,8 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 
 ## 远程新建任务（文件上传）
 
-- 列表页 AppBar「新建任务」→ `AddTaskScreen`（`lib/presentation/screens/add_task_screen.dart`）：file_picker 选文件 + 基础输出配置（vcodec/CRF/format，其余用 FFBox defaultParams 内置副本 `buildOutputParams`）。
+- 列表页 AppBar「新建任务」→ `AddTaskScreen`（`lib/presentation/screens/add_task_screen.dart`）：file_picker 选文件 + 基础输出配置（vcodec/CRF/format，其余用 FFBox defaultParams 内置副本 `buildOutputParams`）。顶部 `_ModeBanner` 三态提示创建模式（权限受限/本机直连/远程上传），与 `_blockedByPrivilegedRemote` 提交阻断联动。
+- 输出参数表单（`output_params_form.dart`）拆为「视频/音频/输出」三张分节卡片；参数帮助对齐 web 悬停 tooltip 语义，触屏下统一为行尾「?」按钮（`_HelpButton`，点击弹底部说明层）：帮助文案优先级 = 参数 `description` > 当前选中项 `tooltip`（`_codecHelp`/`_selectedTooltip`），「自动」编码器的帮助动态拼接当前复用器默认编码器。
 - 上传协议与 FFBox web（transferManager2.ts）语义一致：占位符 `[uploading] 文件名`（`uploadPlaceholder`）→ 分片 4MB/20MB（十进制）→ 每片 SHA1、文件哈希 = SHA1(分片哈希拼接)（`upload_protocol.dart`）→ `upload/check` 秒传（键 `文件名⬝文件哈希`，U+2B1D）→ `upload/file` 逐片上传（name=分片哈希，并发 2，重试 3）→ `tasks/{id}/merge-upload` → `tasks/{id}/upload-status` false。改分片大小/哈希语义须与服务端 `E:\FFBox\FFBox\src\backend\FFBoxService.ts` 同步。
 - 队列 `UploadQueue`（`lib/application/upload/upload_queue.dart`）：纯 Dart、文件串行、Stream 广播快照；Riverpod 全局持有（`uploadQueueProvider`），生命周期独立于页面（后台上传）。401 项由列表页检测 `hasUnauthorizedError` 登出。
 - Android 上传进度通知：普通 NotificationCompat（非前台服务），固定 ID 3003、channel `upload`（IMPORTANCE_LOW），MethodChannel `top.raincrat.aibeto.ffboxedgelink/upload_notification`（show/cancel），Dart 侧 500ms 节流（`uploadNotificationBridgeProvider`，在列表页/新建页 watch 激活）。**通知 ID 分配**：3001 实时活动（LiveTaskService）、3002 本地服务前台（LocalNodeService）、3003 上传进度，三者不可复用（会互相覆盖）。
@@ -82,7 +84,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 默认 `flutter run -d windows` 本机调试；Android 由人工真机/模拟器验证。
 - 任务列表 1s 轮询（防重入、避免闪屏），设备名旁显示网络延迟（复用 listTaskIds 耗时，颜色分级）。
 - 任务详情页 `TaskDetailScreen`：`GET /api/v1/tasks/{id}` 1s 轮询（防重入、保留旧数据），展示输入媒体、输出配置、遥测曲线（progressLog）、输出文件、转码日志。
-- 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。
+- 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。列表页错误视图中，当前 baseUrl 为回环**且** `localNodeSupportedProvider` 为 true 时额外显示「打开本地服务」按钮（跳转 `LocalServiceScreen` 排查/启动内置服务）。
 - 长标题用 `MarqueeText`（`lib/presentation/widgets/marquee_text.dart`）循环滚动，不引入外部包。
 - 内置本地服务（nodejs-mobile）仅 Android arm64-v8a 支持：登录页「本地服务」入口经 `localNodeSupportedProvider` 校准原生 ABI（MethodChannel `abi` → `Build.SUPPORTED_ABIS.first`）后显示；非 arm64 设备隐藏入口，`LocalNodeChannel.isSupported` 为 false，启动/停止/初始化均短路。新增支持 ABI 时须同步原生 `abi` 返回与 Dart `_supportedAbi`。
 - 构建要点：`build.gradle.kts` 中 `defaultConfig.ndk` 必须 `abiFilters.clear()` 后仅限 `arm64-v8a`；`defaultConfig.externalNativeBuild.cmake.arguments` 必须包含 `-DANDROID_STL=c++_shared`（`libnode.so` 依赖 NDK C++ 运行时），否则 `System.loadLibrary("nodeext")` 因 `libc++_shared.so` 缺失抛出 `UnsatisfiedLinkError` 闪退。Kotlin 侧 `catch (Throwable)` 而非 `catch (Exception)` 以防御此类 Error 子类。
