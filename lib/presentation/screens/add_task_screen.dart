@@ -10,12 +10,14 @@ import 'dart:io' as io;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ffbox_edgelink/application/local_node/local_output_service.dart';
 import 'package:ffbox_edgelink/application/upload/upload_protocol.dart';
 import 'package:ffbox_edgelink/application/upload/upload_queue.dart';
 import 'package:ffbox_edgelink/core/network/api_exception.dart';
 import 'package:ffbox_edgelink/core/utils/log.dart';
 import 'package:ffbox_edgelink/presentation/providers/app_providers.dart';
 import 'package:ffbox_edgelink/presentation/theme/ak_theme.dart';
+import 'package:ffbox_edgelink/presentation/widgets/output_params_form.dart';
 
 /// 新建任务页：文件选择、输出配置与提交，附带队列状态区。
 class AddTaskScreen extends ConsumerStatefulWidget {
@@ -30,13 +32,9 @@ class AddTaskScreen extends ConsumerStatefulWidget {
 
 class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   final List<({String path, String name, int size})> _files = [];
-  String _vcodec = 'libx265';
-  int _crf = 24;
-  String _format = 'mp4';
+  final GlobalKey<OutputParamsFormState> _formKey =
+      GlobalKey<OutputParamsFormState>();
   bool _submitting = false;
-
-  static const _vcodecs = ['libx264', 'libx265'];
-  static const _formats = ['mp4', 'mkv (matroska)'];
 
   @override
   void initState() {
@@ -85,17 +83,100 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   void _remove(String path) =>
       setState(() => _files.removeWhere((f) => f.path == path));
 
+  // --- 任务创建模式 ---
+
+  /// 本机回环 + FileSystem 权限时使用直接路径模式：
+  /// 与 FFBox web 前端语义一致——服务端按原路径创建本地任务，
+  /// 文件与服务器同机（内置服务/同机桌面版），无需分片上传。
+  bool get _directMode {
+    final session = ref.read(sessionProvider);
+    return LocalOutputService.useDirectPaths(
+      baseUrl: ref.read(appConfigProvider).normalizedBaseUrl,
+      hasFileSystemPermission:
+          session?.hasFileSystemPermission ?? false,
+    );
+  }
+
+  /// 有 FileSystem 权限但连接非本机回环：服务端对该会话一律按原路径
+  /// 创建本地任务（remoteTask=false），上传占位符任务无法被服务端解析，
+  /// 转码必然失败。与 web 版浏览器行为一致：阻止提交并说明原因。
+  bool get _blockedByPrivilegedRemote {
+    final session = ref.read(sessionProvider);
+    final hasPerm = session?.hasFileSystemPermission ?? false;
+    return hasPerm &&
+        !LocalOutputService.isLoopbackUrl(
+          ref.read(appConfigProvider).normalizedBaseUrl,
+        );
+  }
+
+  Future<void> _showPrivilegedRemoteBlock() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AkColors.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AkTheme.cutMd),
+        ),
+        title: Text(
+          '无法通过上传创建任务',
+          style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          '当前账号具有文件系统权限，服务端会以原路径创建任务，'
+          '不接收上传文件。\n\n'
+          '请改用不具有文件系统权限的账号，'
+          '或在本机服务（127.0.0.1）下新建任务。',
+          style: AkTheme.sans(
+            fontSize: 13,
+            color: AkColors.textSecondary,
+            height: 1.6,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('知道了', style: AkTheme.sans(color: AkColors.info)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- 提交 ---
 
   Future<void> _submit() async {
     if (_files.isEmpty || _submitting) return;
+    if (_blockedByPrivilegedRemote) {
+      await _showPrivilegedRemoteBlock();
+      return;
+    }
+    final form = _formKey.currentState;
+    if (form == null) return;
     setState(() => _submitting = true);
     try {
       final outputParams = buildOutputParams(
-        vcodec: _vcodec,
-        crf: _crf,
-        format: _format,
+        video: form.videoSection,
+        audio: form.audioSection,
+        mux: form.muxSection,
       );
+      if (_directMode) {
+        // 直接路径模式：真实路径建任务，跳过上传队列；
+        // Android 下确保输出缓存目录存在（ffmpeg 不会自动建目录）
+        if (io.Platform.isAndroid) {
+          await ref.read(localOutputServiceProvider).outputDir();
+        }
+        final filePaths = _files.map((f) => f.path).toList();
+        logDebug('addTaskUI: create ${filePaths.length} task(s) [direct]');
+        await ref
+            .read(taskRepositoryProvider)
+            .createTasks(filePaths, outputParams);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已创建任务，可在任务列表启动')),
+        );
+        Navigator.of(context).pop();
+        return;
+      }
       final filePaths = _files.map((f) => uploadPlaceholder(f.name)).toList();
       logDebug('addTaskUI: create ${filePaths.length} task(s)');
       final ids = await ref
@@ -153,16 +234,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         children: [
           _FilePickerCard(onPick: _pickFiles, files: _files, onRemove: _remove),
           const SizedBox(height: AkTheme.cutMd),
-          _ConfigCard(
-            vcodec: _vcodec,
-            vcodecItems: _vcodecs,
-            onVcodec: (v) => setState(() => _vcodec = v),
-            crf: _crf,
-            onCrf: (v) => setState(() => _crf = v),
-            format: _format,
-            formatItems: _formats,
-            onFormat: (v) => setState(() => _format = v),
-          ),
+          OutputParamsForm(key: _formKey),
           const SizedBox(height: AkTheme.cutMd),
           if (queueSnap != null && queueSnap.items.isNotEmpty) ...[
             _QueueSection(snapshot: queueSnap),
@@ -194,7 +266,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                     ),
                   )
                 : Text(
-                    '添加并上传',
+                    _directMode ? '添加任务' : '添加并上传',
                     style: AkTheme.sans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -305,150 +377,6 @@ class _FilePickerCard extends StatelessWidget {
               ),
         ],
       ),
-    );
-  }
-}
-
-// --- 基础配置卡片 ---
-
-/// 输出配置卡片：视频编码器 / 输出格式下拉 + CRF 滑杆。
-class _ConfigCard extends StatelessWidget {
-  final String vcodec;
-  final List<String> vcodecItems;
-  final ValueChanged<String> onVcodec;
-  final int crf;
-  final ValueChanged<int> onCrf;
-  final String format;
-  final List<String> formatItems;
-  final ValueChanged<String> onFormat;
-
-  const _ConfigCard({
-    required this.vcodec,
-    required this.vcodecItems,
-    required this.onVcodec,
-    required this.crf,
-    required this.onCrf,
-    required this.format,
-    required this.formatItems,
-    required this.onFormat,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AkColors.panel,
-        border: Border.all(color: AkColors.border, width: AkTheme.hairline),
-      ),
-      padding: const EdgeInsets.all(AkTheme.cutMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '输出配置',
-            style: AkTheme.sans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AkColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _DropdownRow(
-            label: '视频编码器',
-            value: vcodec,
-            items: vcodecItems,
-            onChanged: onVcodec,
-          ),
-          const SizedBox(height: 8),
-          _DropdownRow(
-            label: '输出格式',
-            value: format,
-            items: formatItems,
-            onChanged: onFormat,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                '画质 CRF',
-                style: AkTheme.sans(
-                  fontSize: 13,
-                  color: AkColors.textPrimary,
-                ),
-              ),
-              Expanded(
-                child: Slider(
-                  value: crf.toDouble(),
-                  min: 0,
-                  max: 51,
-                  divisions: 51,
-                  activeColor: AkColors.info,
-                  inactiveColor: AkColors.muted,
-                  label: '$crf',
-                  onChanged: (v) => onCrf(v.round()),
-                ),
-              ),
-              Text(
-                '$crf',
-                style: AkTheme.mono(
-                  fontSize: 13,
-                  color: AkColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            '音频直接复制（copy），分辨率不改变',
-            style: AkTheme.sans(fontSize: 11, color: AkColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 配置行：标签 + 下拉。
-class _DropdownRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final List<String> items;
-  final ValueChanged<String> onChanged;
-
-  const _DropdownRow({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 84,
-          child: Text(
-            label,
-            style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
-          ),
-        ),
-        Expanded(
-          child: DropdownButton<String>(
-            value: value,
-            isExpanded: true,
-            dropdownColor: AkColors.raised,
-            style: AkTheme.mono(fontSize: 13, color: AkColors.textPrimary),
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final item in items)
-                DropdownMenuItem(value: item, child: Text(item)),
-            ],
-            onChanged: (v) {
-              if (v != null) onChanged(v);
-            },
-          ),
-        ),
-      ],
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ffbox_edgelink/application/local_node/local_output_service.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
 import 'package:ffbox_edgelink/domain/entities/task_status.dart';
@@ -35,6 +37,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   bool _refreshing = false;
   final Set<TaskOperation> _busyOps = {};
   String? _statusMessage;
+
+  /// 正在导出的输出文件路径（同时仅一个导出任务）。
+  String? _exportingPath;
 
   static const _pollInterval = Duration(milliseconds: 500);
 
@@ -776,23 +781,33 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         : task.activeRun?.outputFiles ?? const <String>[];
     if (files.isEmpty) return const SizedBox.shrink();
 
+    // 本机回环连接（内置服务/同机服务器）时输出文件可直接访问，支持导出
+    final exportable = LocalOutputService.isLoopbackUrl(
+      ref.read(appConfigProvider).normalizedBaseUrl,
+    );
+
     return _SectionCard(
       title: '输出文件（${files.length}）',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (exportable) ...[
+            Text(
+              '输出文件位于本机，可导出到系统下载目录',
+              style: AkTheme.sans(
+                fontSize: 10,
+                color: AkColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           for (final f in files)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // const Icon(
-                  //   Icons.insert_drive_file_outlined,
-                  //   size: 13,
-                  //   color: AkColors.success,
-                  // ),
-                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       f,
@@ -803,12 +818,112 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       ),
                     ),
                   ),
+                  if (exportable)
+                    _buildExportButton(f),
                 ],
               ),
             ),
         ],
       ),
     );
+  }
+
+  /// 单个输出文件的导出按钮（导出中显示进度指示）。
+  Widget _buildExportButton(String path) {
+    final exporting = _exportingPath == path;
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: exporting
+          ? const Padding(
+              padding: EdgeInsets.all(6),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AkColors.info,
+              ),
+            )
+          : IconButton(
+              padding: EdgeInsets.zero,
+              iconSize: 16,
+              splashRadius: 16,
+              tooltip: '导出',
+              icon: const Icon(
+                Icons.save_alt,
+                color: AkColors.info,
+              ),
+              onPressed:
+                  _exportingPath == null ? () => _exportOutputFile(path) : null,
+            ),
+    );
+  }
+
+  // --- 输出文件导出 ---
+
+  /// 常见输出容器/音频格式的 MIME 映射（导出保存时使用）。
+  static const Map<String, String> _outputMimeTypes = {
+    'mp4': 'video/mp4',
+    'm4v': 'video/mp4',
+    'mov': 'video/quicktime',
+    'mkv': 'video/x-matroska',
+    'webm': 'video/webm',
+    'avi': 'video/x-msvideo',
+    'flv': 'video/x-flv',
+    'ts': 'video/mp2t',
+    'mpg': 'video/mpeg',
+    'mpeg': 'video/mpeg',
+    'wmv': 'video/x-ms-wmv',
+    'gif': 'image/gif',
+    'mp3': 'audio/mpeg',
+    'm4a': 'audio/mp4',
+    'aac': 'audio/aac',
+    'flac': 'audio/flac',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'opus': 'audio/opus',
+  };
+
+  String _mimeOf(String ext) =>
+      _outputMimeTypes[ext.toLowerCase()] ?? 'application/octet-stream';
+
+  /// 导出单个输出文件到用户选择的位置（系统保存对话框，按路径流式拷贝）。
+  Future<void> _exportOutputFile(String path) async {
+    if (_exportingPath != null) return;
+    setState(() => _exportingPath = path);
+    try {
+      final file =
+          await ref.read(localOutputServiceProvider).resolveOutputFile(path);
+      if (!mounted) return;
+      if (file == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('输出文件不存在或已被清理')),
+        );
+        return;
+      }
+      final base = path.split(RegExp(r'[\\/]')).last;
+      final dot = base.lastIndexOf('.');
+      final name = dot > 0 ? base.substring(0, dot) : base;
+      final ext = dot > 0 ? base.substring(dot + 1) : '';
+      final result = await FileSaver.instance.saveAs(
+        name: name,
+        filePath: file.path,
+        fileExtension: ext,
+        mimeType: MimeType.custom,
+        customMimeType: _mimeOf(ext),
+      );
+      if (!mounted || result == null) return; // null = 用户取消
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已导出到 $result')),
+      );
+    } catch (e) {
+      logDebug('taskDetailUI: export failed $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exportingPath = null);
+    }
   }
 
   // -------------------------------------------------------------------------

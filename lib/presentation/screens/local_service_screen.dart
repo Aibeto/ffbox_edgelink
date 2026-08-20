@@ -214,6 +214,12 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
               child: _RuntimeEnvCard(),
             ),
 
+            // --- 输出文件缓存（默认输出目录，可导出/清理） ---
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: _OutputCacheCard(),
+            ),
+
             // --- 日志面板（固定高度，内容超长时列表内部滚动） ---
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -514,6 +520,171 @@ class _EnvRow extends StatelessWidget {
                 color: AkColors.textPrimary,
                 height: 1.4,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 输出文件缓存卡（默认输出目录与清理）
+// ---------------------------------------------------------------------------
+
+/// 内置服务的默认输出目录（filesDir/cache/FFBoxOutput）：新建任务默认把
+/// 输出写到这里（可在任务详情页导出），此处展示占用并支持一键清理。
+class _OutputCacheCard extends ConsumerStatefulWidget {
+  const _OutputCacheCard();
+
+  @override
+  ConsumerState<_OutputCacheCard> createState() => _OutputCacheCardState();
+}
+
+class _OutputCacheCardState extends ConsumerState<_OutputCacheCard> {
+  String? _dirPath;
+  int _sizeBytes = 0;
+  bool _loading = true;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    try {
+      final service = ref.read(localOutputServiceProvider);
+      final dir = await service.outputDir();
+      final size = await service.outputCacheSize();
+      if (!mounted) return;
+      setState(() {
+        _dirPath = dir.path;
+        _sizeBytes = size;
+      });
+    } catch (_) {
+      // 路径不可用时保持空态
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _clear() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AkColors.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AkTheme.cutMd),
+        ),
+        title: Text(
+          '清理输出缓存？',
+          style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          '将删除输出目录中的全部转码产物（未导出的文件将丢失），不影响任务本身。',
+          style: AkTheme.sans(
+            fontSize: 13,
+            color: AkColors.textSecondary,
+            height: 1.6,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              '取消',
+              style: AkTheme.sans(color: AkColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('清理', style: AkTheme.sans(color: AkColors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (go != true) return;
+    setState(() => _clearing = true);
+    try {
+      await ref.read(localOutputServiceProvider).clearOutputCache();
+      await _refresh();
+    } finally {
+      if (mounted) setState(() => _clearing = false);
+    }
+  }
+
+  String _humanSize(int bytes) {
+    if (bytes >= 1000 * 1000 * 1000) {
+      return '${(bytes / 1000 / 1000 / 1000).toStringAsFixed(2)} GB';
+    }
+    if (bytes >= 1000 * 1000) {
+      return '${(bytes / 1000 / 1000).toStringAsFixed(1)} MB';
+    }
+    if (bytes >= 1000) return '${(bytes / 1000).toStringAsFixed(0)} KB';
+    return '$bytes B';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AkColors.panel,
+        border: Border.all(color: AkColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '输出文件缓存',
+                style: AkTheme.sans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AkColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _loading ? '统计中…' : _humanSize(_sizeBytes),
+                style: AkTheme.mono(
+                  fontSize: 12,
+                  color: AkColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: (_clearing || _loading) ? null : _clear,
+                child: Text(
+                  '清理',
+                  style: AkTheme.sans(fontSize: 12, color: AkColors.danger),
+                ),
+              ),
+            ],
+          ),
+          if (_dirPath != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _dirPath!,
+              style: AkTheme.mono(
+                fontSize: 10,
+                color: AkColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(
+            '新建任务默认输出到上述目录，转码完成后可在任务详情页导出；'
+            '建议及时导出并定期清理。',
+            style: AkTheme.sans(
+              fontSize: 10,
+              color: AkColors.textSecondary,
+              height: 1.5,
             ),
           ),
         ],

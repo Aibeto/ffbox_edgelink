@@ -312,6 +312,22 @@ async function buildBackend() {
 					loader: 'js',
 				};
 			});
+			// formidable@2 在构造时按插件名动态 require(`${__dirname}/plugins/x.js`)，
+			// esbuild 无法静态分析（产物运行时报 MODULE_NOT_FOUND，multipart 请求
+			// 全部 400 "Request body is invalid data"）。将动态 require 改写为
+			// 四个内置插件的静态 require 映射，使其正常内联进单文件产物。
+			build.onLoad({ filter: /[\\/]formidable[\\/]src[\\/]Formidable\.js$/ }, (args) => {
+				let contents = fs.readFileSync(args.path, 'utf8');
+				const dynamicRequire = /this\.use\(require\(path\.join\(__dirname,\s*'plugins',\s*`\$\{plgName\}\.js`\)\)\);/;
+				if (!dynamicRequire.test(contents)) {
+					throw new Error('formidable Formidable.js 插件加载代码与预期不符，请检查 formidable 版本');
+				}
+				contents = contents.replace(
+					dynamicRequire,
+					'this.use(({ octetstream: require("./plugins/octetstream.js"), querystring: require("./plugins/querystring.js"), multipart: require("./plugins/multipart.js"), json: require("./plugins/json.js") })[plgName]);',
+				);
+				return { contents, loader: 'js' };
+			});
 		},
 	};
 	await esbuild.build({

@@ -183,6 +183,22 @@ class FFBoxApi {
   Future<void> resetTasks(List<int> ids) =>
       _batchRequest('/api/v1/tasks/reset', ids);
 
+  // --- 转码配置 ---
+
+  /// 获取服务器 ffmpeg 扫描结果（编码器/复用器/滤镜，原始 JSON）。
+  ///
+  /// 响应结构：`{codecs: {video: [...], audio: [...]},
+  /// formats: {muxer: [...], demuxer: [...]}, filters: [...]}`；
+  /// 由应用层解析器转换为编码目录（web parseFFmpegCodecsToCodecsList 语义）。
+  Future<Map<String, dynamic>> getCodecs({bool silent = true}) {
+    return _client.request<Map<String, dynamic>>(
+      method: 'GET',
+      path: _url('/api/v1/system/codecs'),
+      retryOnFailure: true,
+      silent: silent,
+    );
+  }
+
   // --- 服务器配置 ---
 
   /// 获取服务器配置（并发/FFmpeg 路径/任务保留策略等）。

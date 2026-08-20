@@ -99,8 +99,15 @@ class SessionRepositoryImpl implements SessionRepository {
       return null;
     }
     final username = store['session_username'] as String? ?? '';
+    final hasFileSystemPermission =
+        store['session_hasFileSystemPermission'] as bool? ?? false;
     logDebug('session.load: baseUrl=$baseUrl username=$username');
-    return Session(baseUrl: baseUrl, username: username, sessionId: sessionId);
+    return Session(
+      baseUrl: baseUrl,
+      username: username,
+      sessionId: sessionId,
+      hasFileSystemPermission: hasFileSystemPermission,
+    );
   }
 
   @override
@@ -109,6 +116,7 @@ class SessionRepositoryImpl implements SessionRepository {
     store['session_baseUrl'] = session.baseUrl;
     store['session_username'] = session.username;
     store['session_sessionId'] = session.sessionId;
+    store['session_hasFileSystemPermission'] = session.hasFileSystemPermission;
     await _writeStore(store);
     logDebug(
       'session.save: baseUrl=${session.baseUrl} username=${session.username}',
@@ -121,6 +129,7 @@ class SessionRepositoryImpl implements SessionRepository {
     store.remove('session_baseUrl');
     store.remove('session_username');
     store.remove('session_sessionId');
+    store.remove('session_hasFileSystemPermission');
     await _writeStore(store);
     logDebug('session.clear: 会话已清除');
   }

@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ffbox_edgelink/application/auth/auth_service.dart';
+import 'package:ffbox_edgelink/application/config/codec_catalog_service.dart';
 import 'package:ffbox_edgelink/application/live/live_activity_service.dart';
 import 'package:ffbox_edgelink/application/local_node/local_node_service.dart';
+import 'package:ffbox_edgelink/application/local_node/local_output_service.dart';
 import 'package:ffbox_edgelink/application/task/task_service.dart';
 import 'package:ffbox_edgelink/application/upload/chunk_hasher.dart';
 import 'package:ffbox_edgelink/application/upload/upload_queue.dart';
@@ -13,14 +15,17 @@ import 'package:ffbox_edgelink/core/network/local_node_channel.dart';
 import 'package:ffbox_edgelink/core/notifications/live_activity_channel.dart';
 import 'package:ffbox_edgelink/core/notifications/upload_notification_channel.dart';
 import 'package:ffbox_edgelink/data/repositories/auth_repository_impl.dart';
+import 'package:ffbox_edgelink/data/repositories/codec_catalog_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/server_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/server_settings_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/session_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/task_repository_impl.dart';
 import 'package:ffbox_edgelink/data/repositories/upload_repository_impl.dart';
 import 'package:ffbox_edgelink/data/sources/remote/ffbox_api.dart';
+import 'package:ffbox_edgelink/domain/entities/codec_catalog.dart';
 import 'package:ffbox_edgelink/domain/entities/live_activity_config.dart';
 import 'package:ffbox_edgelink/domain/repositories/auth_repository.dart';
+import 'package:ffbox_edgelink/domain/repositories/codec_catalog_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/server_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/server_settings_repository.dart';
 import 'package:ffbox_edgelink/domain/repositories/session_repository.dart';
@@ -109,11 +114,40 @@ final serverSettingsRepositoryProvider = Provider<ServerSettingsRepository>(
   (ref) => ServerSettingsRepositoryImpl(ref.watch(ffboxApiProvider)),
 );
 
+// --- 转码配置目录 ---
+
+/// 编码目录仓储。
+final codecCatalogRepositoryProvider = Provider<CodecCatalogRepository>(
+  (ref) => CodecCatalogRepositoryImpl(ref.watch(ffboxApiProvider)),
+);
+
+/// 编码目录应用服务。
+final codecCatalogServiceProvider = Provider<CodecCatalogService>(
+  (ref) => CodecCatalogService(ref.watch(codecCatalogRepositoryProvider)),
+);
+
+/// 编码目录状态：内置定义 + 服务端扫描合并；拉取失败回退仅内置。
+final codecCatalogProvider = FutureProvider<CodecCatalog>((ref) async {
+  final service = ref.watch(codecCatalogServiceProvider);
+  try {
+    return await service.refresh();
+  } catch (_) {
+    return service.builtinCatalog;
+  }
+});
+
 // --- 业务服务 ---
 
 /// 认证服务。
 final authServiceProvider = Provider<AuthService>(
   (ref) => AuthService(ref.watch(authRepositoryProvider)),
+);
+
+// --- 本地输出（内置服务输出缓存与直连路径决策） ---
+
+/// 本地输出服务：回环判断、输出缓存目录管理、输出文件路径解析。
+final localOutputServiceProvider = Provider<LocalOutputService>(
+  (ref) => LocalOutputService(),
 );
 
 /// 任务服务。

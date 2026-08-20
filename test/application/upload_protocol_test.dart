@@ -47,18 +47,23 @@ void main() {
   });
 
   group('buildOutputParams', () {
-    test('嵌入基础配置且其余字段为 FFBox 默认值', () {
-      final p = buildOutputParams(vcodec: 'libx264', crf: 20, format: 'mp4');
+    test('嵌入三段输出配置且其余字段为 FFBox 默认值', () {
+      final video = {
+        'vcodec': 'libx264',
+        'resolution': '不改变',
+        'framerate': '不改变',
+        'ratecontrol': 'CRF',
+        'detail': {'crf': 20},
+      };
+      final audio = {'acodec': 'copy', 'detail': <String, dynamic>{}};
+      final mux = {'format': 'mp4', 'moveflags': false, 'detail': <String, dynamic>{}};
+      final p = buildOutputParams(video: video, audio: audio, mux: mux);
       expect(p['input']['files'][0]['demuxer'], '自动');
       expect(p['outputs'][0]['video']['vcodec'], 'libx264');
       expect(p['outputs'][0]['video']['ratecontrol'], 'CRF');
       expect(p['outputs'][0]['video']['detail']['crf'], 20);
       expect(p['outputs'][0]['audio']['acodec'], 'copy');
       expect(p['outputs'][0]['mux']['format'], 'mp4');
-      expect(
-        p['outputs'][0]['mux']['filePath'],
-        '[filedir]/[filename]_converted.[fileext]',
-      );
       expect(p['extra']['presetName'], '默认配置');
     });
   });

@@ -4,10 +4,14 @@ class Session {
   final String username;
   final String sessionId;
 
+  /// 登录用户是否拥有 FileSystem 权限（决定任务创建模式，随登录捕获）。
+  final bool hasFileSystemPermission;
+
   const Session({
     required this.baseUrl,
     required this.username,
     required this.sessionId,
+    this.hasFileSystemPermission = false,
   });
 }
 

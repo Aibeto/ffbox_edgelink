@@ -33,6 +33,13 @@ try {
 } catch (_) {}
 os.tmpdir = () => runtimeTmpdir;
 
+// 内置服务输出目录：App 端默认输出模板指向 filesDir/cache/FFBoxOutput
+// （绝对路径写入缓存区，任务详情页可导出）。ffmpeg 不会自动创建输出目录，
+// 此处兜底创建（App 提交任务前亦会确保目录存在）。
+try {
+	fs.mkdirSync(path.join(runtimeTmpdir, 'FFBoxOutput'), { recursive: true });
+} catch (_) {}
+
 const { FFBoxService } = require('../../../FFBox/src/backend/FFBoxService');
 const UIBridge = require('../../../FFBox/src/backend/uiBridge').default;
 const { version } = require('../../../FFBox/src/common/constants');
@@ -134,17 +141,61 @@ void (async () => {
 parentPort?.on('message', async (msg: unknown) => {
 	if ((msg as { type?: string })?.type !== 'stop') return;
 	try {
-		// 暂停全部活跃任务：FFBox 的暂停语义即终止 ffmpeg 进程并记录断点，
-		// 避免 worker 退出后 ffmpeg 成为孤儿进程
+		// 注意：不可用 taskPauseBatch——FFBox 的暂停是 SIGSTOP 挂起进程，
+		// worker 退出后 ffmpeg 会以挂起态遗留（持有内存与文件句柄）。
+		// 正确做法是 taskResetBatch 软停止：向 ffmpeg 发送 'q' 优雅收尾
+		// （写完容器尾，输出文件不损坏），进程真正退出，任务回到 idle。
 		const tasks = (await service.getTaskList(0, 999999)) as Array<{
 			id: number;
 			status: string;
+			ffmpeg?: { forceKill: (cb: () => void) => void } | null;
 		}>;
-		const activeIds = tasks
-			.filter((t) => !['idle', 'finished'].includes(t.status))
+		const resetStatuses = [
+			'running',
+			'paused',
+			'paused_queued',
+			'stopping',
+			'finishing',
+			'idle_queued',
+		];
+		const resetIds = tasks
+			.filter((t) => resetStatuses.includes(t.status))
 			.map((t) => t.id);
-		if (activeIds.length > 0) {
-			await service.taskPauseBatch(activeIds);
+		if (resetIds.length > 0) {
+			// 先持久化未完成任务快照（下次启动经 preserveUnfinishedTasks 恢复）。
+			// 快照写入有 700ms 防抖；重置回调会以 idle 状态重设防抖定时器，
+			// 在其写盘前退出即可保住本快照。
+			(service as unknown as { storeUnfinishedTask?: () => void })
+				.storeUnfinishedTask?.();
+			await new Promise((resolve) => setTimeout(resolve, 900));
+
+			await service.taskResetBatch(resetIds);
+
+			// 等待软停止完成（'q' 收尾需要一点时间；状态 stopping → idle）
+			const deadline = Date.now() + 5000;
+			while (Date.now() < deadline) {
+				const list = (await service.getTaskList(0, 999999)) as Array<{
+					id: number;
+					status: string;
+				}>;
+				if (!list.some((t) => resetIds.includes(t.id) && t.status === 'stopping')) {
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+
+			// 超时兜底：强杀仍未退出的 ffmpeg，确保无孤儿进程
+			const remaining = (await service.getTaskList(0, 999999)) as Array<{
+				id: number;
+				status: string;
+				ffmpeg?: { forceKill: (cb: () => void) => void } | null;
+			}>;
+			for (const t of remaining) {
+				if (resetIds.includes(t.id) && t.ffmpeg) {
+					t.ffmpeg.forceKill(() => {});
+				}
+			}
+			await new Promise((resolve) => setTimeout(resolve, 300));
 		}
 	} catch (e) {
 		console.error('停止任务时出错', e);

@@ -11,8 +11,10 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.BinaryMessenger
 import top.raincrat.aibeto.ffboxedgelink.R
 
-// 上传进度通知 MethodChannel：Dart 侧节流调用 show/cancel，固定 ID 3002。
+// 上传进度通知 MethodChannel：Dart 侧节流调用 show/cancel，固定 ID 3003。
 // 普通进度通知（非前台服务、非 Live Updates），静默 channel 不打扰用户。
+// 注意：3002 为内置本地服务前台通知（LocalNodeService），实时活动为 3001，
+// 不可复用，否则上传进度会覆盖前台服务通知。
 class UploadNotificationChannel(
     private val context: Context,
     messenger: BinaryMessenger,
@@ -21,7 +23,7 @@ class UploadNotificationChannel(
     companion object {
         const val CHANNEL_NAME = "top.raincrat.aibeto.ffboxedgelink/upload_notification"
         const val CHANNEL_ID = "upload"
-        const val NOTIFICATION_ID = 3002
+        const val NOTIFICATION_ID = 3003
     }
 
     private val channel = MethodChannel(messenger, CHANNEL_NAME).also {

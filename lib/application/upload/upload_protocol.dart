@@ -48,11 +48,12 @@ String fileHashOf(List<String> chunkHashes) =>
 
 // --- 默认输出参数 ---
 
-/// 构建 OutputParams：嵌入用户基础配置，其余字段为 FFBox defaultParams 副本。
+/// 构建 OutputParams：三段输出配置由输出参数表单（OutputParamsForm）构建，
+/// 其余字段为 FFBox defaultParams 副本。
 Map<String, dynamic> buildOutputParams({
-  required String vcodec,
-  required int crf,
-  required String format,
+  required Map<String, dynamic> video,
+  required Map<String, dynamic> audio,
+  required Map<String, dynamic> mux,
 }) {
   return {
     'input': {
@@ -65,28 +66,7 @@ Map<String, dynamic> buildOutputParams({
       'lines': <dynamic>[],
     },
     'outputs': [
-      {
-        'video': {
-          'vcodec': vcodec,
-          'resolution': '不改变',
-          'framerate': '不改变',
-          'ratecontrol': 'CRF',
-          'detail': {'crf': crf},
-        },
-        'audio': {
-          'acodec': 'copy',
-          'ratecontrol': 'CBR',
-          'detail': <String, dynamic>{},
-        },
-        'mux': {
-          'format': format,
-          'moveflags': false,
-          'filePath': '[filedir]/[filename]_converted.[fileext]',
-          'begin': '',
-          'end': '',
-          'detail': <String, dynamic>{},
-        },
-      },
+      {'video': video, 'audio': audio, 'mux': mux},
     ],
     'extra': {'presetName': '默认配置'},
   };

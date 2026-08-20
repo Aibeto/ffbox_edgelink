@@ -56,6 +56,7 @@ class AuthService {
         baseUrl: baseUrl,
         username: username,
         sessionId: result.sessionId,
+        hasFileSystemPermission: result.hasFileSystemPermission,
       ),
     );
   }
