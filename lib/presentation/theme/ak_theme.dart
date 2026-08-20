@@ -223,11 +223,11 @@ class AkTheme {
       ),
       labelStyle: sans(fontSize: 13, color: AkColors.textSecondary),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+        borderRadius: BorderRadius.circular(AkTheme.cardRadius),
         borderSide: const BorderSide(color: AkColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
+        borderRadius: BorderRadius.circular(AkTheme.cardRadius),
         borderSide: const BorderSide(color: AkColors.border),
       ),
       focusedBorder: OutlineInputBorder(
@@ -251,15 +251,39 @@ class AkTheme {
         borderRadius: BorderRadius.circular(AkTheme.cardRadius),
       ),
     ),
-    dividerTheme: const DividerThemeData(
-      color: AkColors.border,
-      thickness: 1,
-      space: 0,
+    // 全局直角规范：对话框 / 底部弹层 / Snackbar / 按钮一律无圆角
+    dialogTheme: DialogThemeData(
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      showDragHandle: false,
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AkColors.raised,
       contentTextStyle: _sansBase.copyWith(color: AkColors.textPrimary),
       behavior: SnackBarBehavior.floating,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(
+      color: AkColors.border,
+      thickness: 1,
+      space: 0,
     ),
   );
 }

@@ -52,6 +52,14 @@ class _FakeTaskRepo implements TaskRepository {
   Future<void> resumeTasks(List<int> ids) async {}
   @override
   Future<void> resetTasks(List<int> ids) async {}
+  @override
+  Future<void> downloadOutputFile({
+    required int taskId,
+    required int runIndex,
+    required int outputIndex,
+    required String savePath,
+    void Function(int count, int total)? onProgress,
+  }) async {}
 }
 
 class _FakeUploadRepo implements UploadRepository {

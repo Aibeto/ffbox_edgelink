@@ -51,9 +51,6 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AkColors.raised,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AkTheme.cutSm),
-        ),
         title: Text(
           '导出日志',
           style: AkTheme.sans(
@@ -251,15 +248,12 @@ class _ExportLogsScreenState extends State<ExportLogsScreen> {
                 // 进度条（仅压缩阶段）
                 if (_showProgress) ...[
                   const SizedBox(height: 24),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                    child: LinearProgressIndicator(
-                      value: _compressProgress,
-                      minHeight: 6,
-                      backgroundColor: AkColors.muted,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AkColors.info,
-                      ),
+                  LinearProgressIndicator(
+                    value: _compressProgress,
+                    minHeight: 6,
+                    backgroundColor: AkColors.muted,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AkColors.info,
                     ),
                   ),
                   const SizedBox(height: 8),

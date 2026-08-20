@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:ffbox_edgelink/application/local_node/local_output_service.dart';
 import 'package:ffbox_edgelink/domain/entities/task.dart';
 import 'package:ffbox_edgelink/domain/entities/task_operation.dart';
@@ -40,6 +42,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   /// 正在导出的输出文件路径（同时仅一个导出任务）。
   String? _exportingPath;
+
+  /// 远程下载进度 [0,1]；null 表示不确定进度（本机解析/保存拷贝阶段）。
+  double? _exportProgress;
 
   static const _pollInterval = Duration(milliseconds: 500);
 
@@ -305,9 +310,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               backgroundColor: AkColors.info.withValues(alpha: 0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AkTheme.cutSm),
-              ),
             ),
           ),
         ],
@@ -469,14 +471,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: LinearProgressIndicator(
-                value: task.progress.clamp(0.0, 1.0),
-                minHeight: 4,
-                backgroundColor: AkColors.border,
-                valueColor: const AlwaysStoppedAnimation<Color>(AkColors.info),
-              ),
+            LinearProgressIndicator(
+              value: task.progress.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: AkColors.border,
+              valueColor: const AlwaysStoppedAnimation<Color>(AkColors.info),
             ),
           ] else if (task.elapsedSeconds > 0) ...[
             const SizedBox(height: 10),
@@ -561,9 +560,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               ),
               backgroundColor: AkColors.panel,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AkTheme.cutSm),
-              ),
             ),
             icon: Icon(switch (op) {
               TaskOperation.start => Icons.play_arrow,
@@ -695,7 +691,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AkColors.canvas,
-                borderRadius: BorderRadius.circular(AkTheme.cutSm),
                 border: Border.all(
                   color: AkColors.border,
                   width: AkTheme.hairline,
@@ -781,8 +776,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         : task.activeRun?.outputFiles ?? const <String>[];
     if (files.isEmpty) return const SizedBox.shrink();
 
-    // 本机回环连接（内置服务/同机服务器）时输出文件可直接访问，支持导出
-    final exportable = LocalOutputService.isLoopbackUrl(
+    // 本机回环连接（内置服务/同机服务器）直接读本地文件导出；
+    // 远程连接经后端下载接口导出（需服务端支持 output-file 路由）
+    final loopback = LocalOutputService.isLoopbackUrl(
       ref.read(appConfigProvider).normalizedBaseUrl,
     );
 
@@ -791,18 +787,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (exportable) ...[
-            Text(
-              '输出文件位于本机，可导出到系统下载目录',
-              style: AkTheme.sans(
-                fontSize: 10,
-                color: AkColors.textSecondary,
-                height: 1.5,
-              ),
+          Text(
+            loopback ? '输出文件位于本机，可导出到系统下载目录' : '输出文件位于服务器，导出时将先下载到本机',
+            style: AkTheme.sans(
+              fontSize: 10,
+              color: AkColors.textSecondary,
+              height: 1.5,
             ),
-            const SizedBox(height: 6),
-          ],
-          for (final f in files)
+          ),
+          const SizedBox(height: 6),
+          for (var i = 0; i < files.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
@@ -810,7 +804,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      f,
+                      files[i],
                       style: AkTheme.mono(
                         fontSize: 11,
                         color: AkColors.textSecondary,
@@ -818,8 +812,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                       ),
                     ),
                   ),
-                  if (exportable)
-                    _buildExportButton(f),
+                  _buildExportButton(task, files[i], i),
                 ],
               ),
             ),
@@ -828,31 +821,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     );
   }
 
-  /// 单个输出文件的导出按钮（导出中显示进度指示）。
-  Widget _buildExportButton(String path) {
+  /// 单个输出文件的导出按钮：远程下载阶段显示百分比，其余阶段显示进度指示。
+  Widget _buildExportButton(Task task, String path, int outputIndex) {
     final exporting = _exportingPath == path;
+    final progress = exporting ? _exportProgress : null;
     return SizedBox(
-      width: 28,
       height: 28,
+      width: progress != null ? 52 : 28,
       child: exporting
-          ? const Padding(
-              padding: EdgeInsets.all(6),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AkColors.info,
-              ),
-            )
+          ? progress != null
+                ? Center(
+                    child: Text(
+                      '${(progress * 100).round()}%',
+                      style: AkTheme.mono(fontSize: 10, color: AkColors.info),
+                      textAlign: TextAlign.right,
+                    ),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AkColors.info,
+                    ),
+                  )
           : IconButton(
               padding: EdgeInsets.zero,
               iconSize: 16,
               splashRadius: 16,
               tooltip: '导出',
-              icon: const Icon(
-                Icons.save_alt,
-                color: AkColors.info,
-              ),
-              onPressed:
-                  _exportingPath == null ? () => _exportOutputFile(path) : null,
+              icon: const Icon(Icons.save_alt, color: AkColors.info),
+              onPressed: _exportingPath == null
+                  ? () => _exportOutputFile(task, path, outputIndex)
+                  : null,
             ),
     );
   }
@@ -885,19 +885,83 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   String _mimeOf(String ext) =>
       _outputMimeTypes[ext.toLowerCase()] ?? 'application/octet-stream';
 
-  /// 导出单个输出文件到用户选择的位置（系统保存对话框，按路径流式拷贝）。
-  Future<void> _exportOutputFile(String path) async {
+  /// 导出单个输出文件到用户选择的位置（系统保存对话框）。
+  ///
+  /// 本机回环连接：按路径解析本地文件直接拷贝；远程连接：先经
+  /// `GET /api/v1/tasks/{id}/output-file` 下载到临时文件（按钮上显示
+  /// 百分比进度），保存完成后删除临时文件。
+  Future<void> _exportOutputFile(
+    Task task,
+    String path,
+    int outputIndex,
+  ) async {
     if (_exportingPath != null) return;
-    setState(() => _exportingPath = path);
+    setState(() {
+      _exportingPath = path;
+      _exportProgress = null;
+    });
+    File? tempFile;
     try {
-      final file =
-          await ref.read(localOutputServiceProvider).resolveOutputFile(path);
-      if (!mounted) return;
-      if (file == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('输出文件不存在或已被清理')),
-        );
-        return;
+      final loopback = LocalOutputService.isLoopbackUrl(
+        ref.read(appConfigProvider).normalizedBaseUrl,
+      );
+      File? file;
+      if (loopback) {
+        file = await ref
+            .read(localOutputServiceProvider)
+            .resolveOutputFile(path);
+        if (!mounted) return;
+        if (file == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('输出文件不存在或已被清理')));
+          return;
+        }
+      } else {
+        final runIndex = task.activeRunIndex;
+        if (runIndex == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('任务运行记录缺失，无法导出')));
+          }
+          return;
+        }
+        final base = path.split(RegExp(r'[\\/]')).last;
+        final dir = await getTemporaryDirectory();
+        tempFile = File('${dir.path}/ffbox_export_$base');
+        try {
+          await ref
+              .read(taskRepositoryProvider)
+              .downloadOutputFile(
+                taskId: task.id,
+                runIndex: runIndex,
+                outputIndex: outputIndex,
+                savePath: tempFile.path,
+                onProgress: (count, total) {
+                  if (!mounted || total <= 0) return;
+                  final p = (count / total).clamp(0.0, 1.0);
+                  // 1% 步进更新，避免高频 setState
+                  if (p >= 1 || (p - (_exportProgress ?? 0)).abs() >= 0.01) {
+                    setState(() => _exportProgress = p);
+                  }
+                },
+              );
+        } on ApiException catch (e) {
+          logDebug('taskDetailUI: download output failed ${e.statusCode}');
+          if (!mounted) return;
+          final msg = e.statusCode == 404
+              ? '输出文件不存在或已被清理（旧版服务器不支持远程下载）'
+              : e.friendlyMessage;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
+          return;
+        }
+        if (!mounted) return;
+        // 下载完成，转入保存阶段（不确定进度）
+        setState(() => _exportProgress = null);
+        file = tempFile;
       }
       final base = path.split(RegExp(r'[\\/]')).last;
       final dot = base.lastIndexOf('.');
@@ -911,18 +975,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         customMimeType: _mimeOf(ext),
       );
       if (!mounted || result == null) return; // null = 用户取消
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已导出到 $result')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已导出到 $result')));
     } catch (e) {
       logDebug('taskDetailUI: export failed $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
       }
     } finally {
-      if (mounted) setState(() => _exportingPath = null);
+      // 临时文件用完即删（saveAs 已完成拷贝；失败路径同样清理）
+      if (tempFile != null) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          _exportingPath = null;
+          _exportProgress = null;
+        });
+      }
     }
   }
 
@@ -974,7 +1049,6 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         height: 200,
         decoration: BoxDecoration(
           color: AkColors.canvas,
-          borderRadius: BorderRadius.circular(AkTheme.cutSm),
           border: Border.all(color: AkColors.border, width: AkTheme.hairline),
         ),
         child: _LogViewer(
@@ -1136,7 +1210,6 @@ class _StreamRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(3),
               border: Border.all(color: color.withValues(alpha: 0.4)),
             ),
             child: Text(
@@ -1254,9 +1327,6 @@ class _ErrorBanner extends StatelessWidget {
                 minimumSize: const Size(0, 28),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 backgroundColor: AkColors.info.withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                ),
               ),
             ),
           ],
@@ -1288,7 +1358,6 @@ class _ProgressCurve extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AkColors.canvas,
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
         border: Border.all(color: AkColors.border, width: AkTheme.hairline),
       ),
       child: ClipRect(
@@ -1601,7 +1670,9 @@ class _LiveActivityToggleRowState
               taskName: widget.taskName,
             );
         // Clarity 埋点：区分成功开启与权限被拒
-        ClarityAnalytics.trackEvent(ok ? 'live_activity_on' : 'live_activity_denied');
+        ClarityAnalytics.trackEvent(
+          ok ? 'live_activity_on' : 'live_activity_denied',
+        );
         if (!ok && mounted) {
           _showSnack('实时通知需要通知权限，请在系统设置中开启');
         }
@@ -1639,7 +1710,6 @@ class _LiveActivityToggleRowState
               : AkColors.border,
           width: AkTheme.hairline,
         ),
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Row(

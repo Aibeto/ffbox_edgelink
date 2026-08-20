@@ -114,9 +114,6 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AkColors.panel,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AkTheme.cutMd),
-        ),
         title: Text(
           '无法通过上传创建任务',
           style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),
@@ -262,9 +259,6 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
               disabledBackgroundColor: AkColors.disabled,
               foregroundColor: AkColors.textInverse,
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AkTheme.cutSm),
-              ),
             ),
             child: _submitting
                 ? const SizedBox(
@@ -479,13 +473,11 @@ class _EmptyPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPick,
-      borderRadius: BorderRadius.circular(AkTheme.cutSm),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
           color: AkColors.muted.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(AkTheme.cutSm),
           border: Border.all(color: AkColors.border, width: AkTheme.hairline),
         ),
         child: Column(
@@ -531,10 +523,7 @@ class _FileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: AkColors.muted.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
-      ),
+      decoration: BoxDecoration(color: AkColors.muted.withValues(alpha: 0.5)),
       child: Row(
         children: [
           const Icon(
@@ -558,7 +547,6 @@ class _FileRow extends StatelessWidget {
           const SizedBox(width: 4),
           InkWell(
             onTap: onRemove,
-            borderRadius: BorderRadius.circular(AkTheme.cutSm),
             child: const Icon(
               Icons.close,
               size: 14,

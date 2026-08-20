@@ -15,6 +15,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 
 - 字体：只用系统字体；所有文字样式必须经 `AkTheme.sans()`/`AkTheme.mono()`（`lib/presentation/theme/ak_theme.dart`）生成，禁止直接构造 `TextStyle` 硬编码 fontFamily；`CustomPainter` 同理；`ThemeData` 中 const 处用 `AkTheme._sansBase`。
 - 色板/几何/动效：一律引用 `AkColors` 与 `AkTheme` token（信号色 info=#4AABEA/action=#F1C644/accent=#E88040；cutSm=8/cutMd=16/cutLg=24/hairline=0.5/strongLine=1/signalBorder=3；motionFast=120ms/motionBase=200ms/motionSlow=350ms），禁止硬编码色值与尺寸。
+- **全局直角规范（禁圆角）**：所有 UI 一律直角，禁止 `BorderRadius.circular(非零)`/`ClipRRect` 圆角裁剪。主题层统一兜底：`AkTheme.dark` 已配置 dialogTheme/bottomSheetTheme（含 `showDragHandle: false`，M3 默认拖拽把手胶囊属圆角元素）/snackBarTheme/elevated·text·outlined 按钮与输入框边框全为零圆角，AlertDialog 站点**勿再传 shape**（会覆盖主题）；`DropdownButton` 菜单**不消费 MenuTheme**，须显式传 `borderRadius: BorderRadius.zero`；`InkWell` 的 borderRadius 直接删除（矩形水波）。状态指示圆点/圆形图标钮等 `BoxShape.circle` 元素属有意圆形，不在此列。
 
 ## 数据与接口约定
 
@@ -62,12 +63,14 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 
 - 列表页 AppBar「新建任务」→ `AddTaskScreen`（`lib/presentation/screens/add_task_screen.dart`）：file_picker 选文件 + 基础输出配置（vcodec/CRF/format，其余用 FFBox defaultParams 内置副本 `buildOutputParams`）。顶部 `_ModeBanner` 三态提示创建模式（权限受限/本机直连/远程上传），与 `_blockedByPrivilegedRemote` 提交阻断联动。
 - 输出参数表单（`output_params_form.dart`）拆为「视频/音频/输出」三张分节卡片；参数帮助对齐 web 悬停 tooltip 语义，触屏下统一为行尾「?」按钮（`_HelpButton`，点击弹底部说明层）：帮助文案优先级 = 参数 `description` > 当前选中项 `tooltip`（`_codecHelp`/`_selectedTooltip`），「自动」编码器的帮助动态拼接当前复用器默认编码器。
+- **复用器扫描参数必须合并进内置复用器**（对齐 web parser：扫描 options 就地写回内置菜单项 `extra.parameters`）：`codec_catalog_parser.dart` 的 `ServerCodecData.mergedBuiltinMuxerGroups` 把命中扫描的内置条目替换为携带参数的副本（保留下内置 label/tooltip/默认编码器），`CodecCatalogService.refresh` 以其作为 `builtinMuxerGroups`——否则 `findMuxer('mp4')` 永远命中无参数的 const 内置规格，mp4/mkv 等内置格式看不到 movflags 等详细参数。mux 节**只有一个**「高级选项」折叠区：复用器 optional 参数与剪辑起止/自定义参数合入同一折叠区。**勿再添加硬编码 moveflags（faststart）开关**（web MuxView 中该开关被注释；faststart 经 mp4 的 movflags 扫描参数提供，`moveflags:false` 仍保留在默认 mux 提交值中）。
 - 上传协议与 FFBox web（transferManager2.ts）语义一致：占位符 `[uploading] 文件名`（`uploadPlaceholder`）→ 分片 4MB/20MB（十进制）→ 每片 SHA1、文件哈希 = SHA1(分片哈希拼接)（`upload_protocol.dart`）→ `upload/check` 秒传（键 `文件名⬝文件哈希`，U+2B1D）→ `upload/file` 逐片上传（name=分片哈希，并发 2，重试 3）→ `tasks/{id}/merge-upload` → `tasks/{id}/upload-status` false。改分片大小/哈希语义须与服务端 `E:\FFBox\FFBox\src\backend\FFBoxService.ts` 同步。
 - 队列 `UploadQueue`（`lib/application/upload/upload_queue.dart`）：纯 Dart、文件串行、Stream 广播快照；Riverpod 全局持有（`uploadQueueProvider`），生命周期独立于页面（后台上传）。401 项由列表页检测 `hasUnauthorizedError` 登出。
 - Android 上传进度通知：普通 NotificationCompat（非前台服务），固定 ID 3003、channel `upload`（IMPORTANCE_LOW），MethodChannel `top.raincrat.aibeto.ffboxedgelink/upload_notification`（show/cancel），Dart 侧 500ms 节流（`uploadNotificationBridgeProvider`，在列表页/新建页 watch 激活）。**通知 ID 分配**：3001 实时活动（LiveTaskService）、3002 本地服务前台（LocalNodeService）、3003 上传进度，三者不可复用（会互相覆盖）。
 - App 重启后队列清空（进程内状态）；服务端分片缓存使重传等效断点续传。
 - 任务创建双模式（语义对齐 FFBox web，决策在 `LocalOutputService`）：**直接路径模式**（会话有 FileSystem 权限 **且** baseUrl 为回环）→ 以真实路径 `POST /api/v1/tasks`，跳过上传队列，输出模板注入 `filesDir/cache/FFBoxOutput/[filename]_converted.[fileext]`（仅 Android 回环，`output_params_form.dart`）；**上传托管模式**（无权限）→ 占位符 + 分片上传。**有 FileSystem 权限但非回环时必须阻止提交**（`_blockedByPrivilegedRemote`）：服务端对该会话一律按原路径建任务，客户端真实路径服务端无法解析，转码必然失败。会话的 FileSystem 权限随登录捕获并持久化（`LoginResult.permissions` 空 = 全开，含 `fileSystem` 即有权限）。
-- 本地输出缓存：`filesDir/cache/FFBoxOutput`（Dart `getApplicationSupportDirectory()/cache` 与 Node `TMPDIR` 同源），App 提交任务前与 `mobile-entry.ts` 启动时均兜底 mkdir（ffmpeg 不建目录）；本地服务页提供容量统计与一键清理（`_OutputCacheCard`）；任务详情页回环连接时输出文件显示导出按钮（`FileSaver.saveAs` 按路径流式拷贝，路径解析经 `LocalOutputService.resolveOutputFile`——绝对路径直取，上传托管裸文件名回退 `FFBoxDownloadCache`）。
+- 本地输出缓存：`filesDir/cache/FFBoxOutput`（Dart `getApplicationSupportDirectory()/cache` 与 Node `TMPDIR` 同源），App 提交任务前与 `mobile-entry.ts` 启动时均兜底 mkdir（ffmpeg 不建目录）；本地服务页提供容量统计与一键清理（`_OutputCacheCard`）；任务详情页输出文件显示导出按钮（`FileSaver.saveAs` 按路径流式拷贝，路径解析经 `LocalOutputService.resolveOutputFile`——绝对路径直取，上传托管裸文件名回退 `FFBoxDownloadCache`）。
+- **输出文件远程下载**：服务端新增 `GET /api/v1/tasks/:id/output-file?runIndex&outputIndex`（`../FFBox/src/backend/uiBridge.ts`，`optionalAuth` 鉴权）。文件路径**由服务端从任务数据解析**（不接受任意路径参数），runIndex 缺省回退最新 run；文件不存在/越界/已被清理返回 404。流式返回 + Content-Length/Content-Disposition，客户端断开时销毁流。EdgeLink 侧 `FFBoxApi.downloadOutputFile`（不拼 JSON 解析、不重试）→ 详情页 `_exportOutputFile` 对非回环连接先下载到 `getTemporaryDirectory()` 临时文件（`Task.activeRunIndex` 定位 run，1% 步进更新 `_exportProgress` 显示百分比），404 提示「输出文件不存在或已被清理（旧版服务器不支持远程下载）」，完成后 `FileSaver.saveAs` 并删除临时文件；旧版服务端无此路由时按 404 处理。
 
 ## 代码注释规范
 
@@ -84,7 +87,7 @@ FFBox EdgeLink —— FFBox 视频转码服务的远程管理 App（Flutter，We
 - 默认 `flutter run -d windows` 本机调试；Android 由人工真机/模拟器验证。
 - 任务列表 1s 轮询（防重入、避免闪屏），设备名旁显示网络延迟（复用 listTaskIds 耗时，颜色分级）。
 - 任务详情页 `TaskDetailScreen`：`GET /api/v1/tasks/{id}` 1s 轮询（防重入、保留旧数据），展示输入媒体、输出配置、遥测曲线（progressLog）、输出文件、转码日志。
-- 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。列表页错误视图中，当前 baseUrl 为回环**且** `localNodeSupportedProvider` 为 true 时额外显示「打开本地服务」按钮（跳转 `LocalServiceScreen` 排查/启动内置服务）。
+- 轮询失败处理：任一非 401 刷新失败即视为连接丢失，停止轮询并显示错误 + 手动「重试」按钮（列表页错误视图 / 详情页错误横幅），点击重试后恢复 1s 轮询并立即刷新；禁止自动继续重试，避免错误/加载中每秒交替闪烁与无效请求。列表页错误视图中，当前 baseUrl 为回环**且** `localNodeSupportedProvider` 为 true 时额外显示「打开本地服务」按钮（跳转 `LocalServiceScreen` 排查/启动内置服务）；读取该 provider **必须 `ref.watch` 而非 `ref.read`**——ABI 查询是异步的，read 在首帧取不到值且不订阅完成事件，会导致按钮首次失败不显示、重试一次才出现。
 - 长标题用 `MarqueeText`（`lib/presentation/widgets/marquee_text.dart`）循环滚动，不引入外部包。
 - 内置本地服务（nodejs-mobile）仅 Android arm64-v8a 支持：登录页「本地服务」入口经 `localNodeSupportedProvider` 校准原生 ABI（MethodChannel `abi` → `Build.SUPPORTED_ABIS.first`）后显示；非 arm64 设备隐藏入口，`LocalNodeChannel.isSupported` 为 false，启动/停止/初始化均短路。新增支持 ABI 时须同步原生 `abi` 返回与 Dart `_supportedAbi`。
 - 构建要点：`build.gradle.kts` 中 `defaultConfig.ndk` 必须 `abiFilters.clear()` 后仅限 `arm64-v8a`；`defaultConfig.externalNativeBuild.cmake.arguments` 必须包含 `-DANDROID_STL=c++_shared`（`libnode.so` 依赖 NDK C++ 运行时），否则 `System.loadLibrary("nodeext")` 因 `libc++_shared.so` 缺失抛出 `UnsatisfiedLinkError` 闪退。Kotlin 侧 `catch (Throwable)` 而非 `catch (Exception)` 以防御此类 Error 子类。

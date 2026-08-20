@@ -27,6 +27,9 @@ class CodecCatalogService {
   CodecCatalog get builtinCatalog => _builtinCatalog();
 
   /// 从服务器拉取扫描结果并合并进目录，返回新目录。
+  ///
+  /// 内置复用器分组替换为携带扫描参数的合并副本（web parser 语义），
+  /// 使 mp4 等内置格式也能展示 movflags 等复用器详细参数。
   Future<CodecCatalog> refresh() async {
     final json = await _repository.getCodecs();
     final server = parseServerCodecData(json);
@@ -35,7 +38,7 @@ class CodecCatalogService {
       serverVideoFamilies: server.videoFamilies,
       builtinAudioFamilies: builtinAudioFamilies,
       serverAudioFamilies: server.audioFamilies,
-      builtinMuxerGroups: builtinMuxerGroups,
+      builtinMuxerGroups: server.mergedBuiltinMuxerGroups,
       serverMuxers: server.muxers,
     );
     return _catalog;

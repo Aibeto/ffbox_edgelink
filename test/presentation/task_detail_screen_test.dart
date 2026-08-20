@@ -95,6 +95,15 @@ class _FakeTaskRepo implements TaskRepository {
     List<String> filePaths,
     Map<String, dynamic>? outputParams,
   ) async => [1];
+
+  @override
+  Future<void> downloadOutputFile({
+    required int taskId,
+    required int runIndex,
+    required int outputIndex,
+    required String savePath,
+    void Function(int count, int total)? onProgress,
+  }) async {}
 }
 
 class _ErrorTaskRepo implements TaskRepository {
@@ -136,6 +145,15 @@ class _ErrorTaskRepo implements TaskRepository {
     List<String> filePaths,
     Map<String, dynamic>? outputParams,
   ) async => [1];
+
+  @override
+  Future<void> downloadOutputFile({
+    required int taskId,
+    required int runIndex,
+    required int outputIndex,
+    required String savePath,
+    void Function(int count, int total)? onProgress,
+  }) async {}
 }
 
 Widget _buildApp(_FakeTaskRepo repo) {

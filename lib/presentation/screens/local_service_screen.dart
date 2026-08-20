@@ -111,9 +111,6 @@ class _LocalServiceScreenState extends ConsumerState<LocalServiceScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AkColors.panel,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AkTheme.cutMd),
-        ),
         title: Text(
           '需要“所有文件访问”权限',
           style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),
@@ -576,9 +573,6 @@ class _OutputCacheCardState extends ConsumerState<_OutputCacheCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AkColors.panel,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AkTheme.cutMd),
-        ),
         title: Text(
           '清理输出缓存？',
           style: AkTheme.sans(fontSize: 16, fontWeight: FontWeight.w600),

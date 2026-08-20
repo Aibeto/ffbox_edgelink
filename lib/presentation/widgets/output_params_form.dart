@@ -347,13 +347,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           }),
           help: _keepFileTimeHelp,
         ),
-        if (muxer != null && muxer.parameters.isNotEmpty) ...[
+        // 复用器扫描参数：非 optional 项直接展示，optional 项并入下方
+        // 唯一的「高级选项」折叠区（避免出现两个折叠区）
+        if (muxer != null && muxer.parameters.isNotEmpty)
           ..._paramRows('mux', _mux, muxer.parameters, optional: false),
-          if (muxer.parameters.any((p) => p.optional))
-            _advancedTile([
-              ..._paramRows('mux', _mux, muxer.parameters, optional: true),
-            ]),
-        ],
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Row(
@@ -378,11 +375,10 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
           ),
         ),
         _advancedTile([
-          _switchRow(
-            'moveflags（faststart）',
-            _mux['moveflags'] == true,
-            (v) => setState(() => _mux['moveflags'] = v),
-          ),
+          // 复用器扫描参数（movflags/faststart 等按容器实际支持项出现，
+          // 对齐 web MuxView「详细参数」折叠区；硬编码 faststart 开关已移除）
+          if (muxer != null)
+            ..._paramRows('mux', _mux, muxer.parameters, optional: true),
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: TextField(
@@ -427,7 +423,7 @@ class OutputParamsFormState extends ConsumerState<OutputParamsForm> {
         return '''不输出${isVideo ? '视频' : '音频'}
 （如果输入中本来就没有${isVideo ? '视频' : '音频'}，
 或者输出容器中不支持${isVideo ? '视频' : '音频'}，
-ffmpeg 会自动忽略相关选项，您无需手动选择此处）''';
+ffmpeg 会自动忽略相关选项，无需手动选择此处）''';
       case 'copy':
         return '复制源码流，不重新编码。';
       case '自动':
@@ -697,6 +693,7 @@ ffmpeg 会自动忽略相关选项，您无需手动选择此处）''';
               value: rc.value,
               isExpanded: true,
               dropdownColor: AkColors.raised,
+              borderRadius: BorderRadius.zero,
               style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
               underline: const SizedBox.shrink(),
               items: [
@@ -1007,6 +1004,7 @@ ffmpeg 会自动忽略相关选项，您无需手动选择此处）''';
               value: selected?.value,
               isExpanded: true,
               dropdownColor: AkColors.raised,
+              borderRadius: BorderRadius.zero,
               style: AkTheme.sans(fontSize: 13, color: AkColors.textPrimary),
               underline: const SizedBox.shrink(),
               hint:
@@ -1156,7 +1154,6 @@ class _HelpButton extends StatelessWidget {
       height: 26,
       child: InkWell(
         onTap: () => _show(context),
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
         child: const Icon(
           Icons.help_outline,
           size: 15,
@@ -1186,7 +1183,6 @@ class _PickerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AkTheme.cutSm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(

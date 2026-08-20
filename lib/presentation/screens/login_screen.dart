@@ -432,9 +432,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             decoration: BoxDecoration(
                               color: AkColors.danger.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(
-                                AkTheme.cutSm,
-                              ),
                               border: Border(
                                 left: BorderSide(
                                   color: AkColors.danger,
@@ -648,7 +645,6 @@ class _CornerButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: label != null ? 8 : 6,
@@ -700,7 +696,6 @@ class _HistoryTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AkTheme.cutSm),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(

@@ -37,6 +37,35 @@ class ApiClient {
 
   // --- 请求方法 ---
 
+  /// 下载文件到本地路径（流式落盘，不走 request 的 JSON 解析与重试：
+  /// 分块下载部分失败由调用方整体重新发起）。
+  Future<void> downloadFile({
+    required String url,
+    required String savePath,
+    void Function(int count, int total)? onReceiveProgress,
+  }) async {
+    logDebug('GET $url (download)');
+    try {
+      await _dio.download(
+        url,
+        savePath,
+        onReceiveProgress: onReceiveProgress,
+      );
+      logDebug('GET $url (download) -> saved $savePath');
+    } on DioException catch (e) {
+      final kind = _mapKind(e);
+      logDebug('GET $url (download) -> ERROR kind=$kind');
+      throw ApiException(
+        e.response?.data?.toString() ?? e.message ?? '网络请求失败',
+        statusCode: e.response?.statusCode,
+        kind: kind,
+      );
+    } catch (e) {
+      logDebug('GET $url (download) -> 非网络异常: $e');
+      throw ApiException(e.toString(), kind: ApiErrorKind.unknown);
+    }
+  }
+
   Future<T> request<T>({
     required String method,
     required String path,

@@ -172,8 +172,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
 
   /// 当前连接为本机回环（内置服务）且设备支持内置服务时，
   /// 连接失败后可快捷跳转本地服务页排查/启动服务。
+  /// watch（而非 read）：ABI 查询异步完成时立即重建，首次失败即显示按钮。
   bool get _showLocalServiceEntry {
-    final supported = ref.read(localNodeSupportedProvider).value ?? false;
+    final supported = ref.watch(localNodeSupportedProvider).value ?? false;
     return supported &&
         LocalOutputService.isLoopbackUrl(
           ref.read(appConfigProvider).normalizedBaseUrl,
@@ -397,9 +398,6 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           vertical: 8,
                         ),
                         backgroundColor: AkColors.info.withValues(alpha: 0.1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AkTheme.cutSm),
-                        ),
                       ),
                     ),
                     if (_showLocalServiceEntry) ...[
@@ -426,9 +424,6 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                           ),
                           backgroundColor: AkColors.action.withValues(
                             alpha: 0.1,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AkTheme.cutSm),
                           ),
                         ),
                       ),

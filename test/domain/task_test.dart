@@ -129,6 +129,7 @@ void main() {
       expect(task.elapsedSeconds, 5);
       expect(task.errorInfo, isEmpty);
       expect(task.outputFiles, ['new.mp4']);
+      expect(task.activeRunIndex, 3);
     });
 
     test('activeRun returns the latest running run', () {

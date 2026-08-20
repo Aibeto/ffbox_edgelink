@@ -40,4 +40,19 @@ class TaskRepositoryImpl implements TaskRepository {
     List<String> filePaths,
     Map<String, dynamic>? outputParams,
   ) => _api.createTasks(filePaths, outputParams);
+
+  @override
+  Future<void> downloadOutputFile({
+    required int taskId,
+    required int runIndex,
+    required int outputIndex,
+    required String savePath,
+    void Function(int count, int total)? onProgress,
+  }) => _api.downloadOutputFile(
+    taskId: taskId,
+    runIndex: runIndex,
+    outputIndex: outputIndex,
+    savePath: savePath,
+    onProgress: onProgress,
+  );
 }

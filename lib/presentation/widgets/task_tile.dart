@@ -268,18 +268,12 @@ class _ProgressBar extends StatelessWidget {
         // track + fill
         Container(
           height: 4,
-          decoration: BoxDecoration(
-            color: AkColors.muted,
-            borderRadius: BorderRadius.circular(2),
-          ),
+          decoration: BoxDecoration(color: AkColors.muted),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: progress.clamp(0.0, 1.0),
             child: Container(
-              decoration: BoxDecoration(
-                color: AkColors.info,
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: AkColors.info),
             ),
           ),
         ),

@@ -288,14 +288,21 @@ class Task {
     'error',
   };
 
+  /// 当前转码 run 的下标（语义同 [activeRun]）。
+  /// 远程下载输出文件时需要以 runIndex 定位服务端对应 run。
+  int? get activeRunIndex {
+    for (var i = runs.length - 1; i >= 0; i--) {
+      if (_activeRunStatuses.contains(runs[i].status)) return i;
+    }
+    return runs.isEmpty ? null : runs.length - 1;
+  }
+
   /// 当前转码 run。runs[0] 是媒体信息 run，真实转码数据在后续 run 上；
   /// 从后往前取最新一条活跃态 run（含 error，避免修正后丢错误信息），
   /// 全部非活跃时回退到最新一条。
   TaskRunInfo? get activeRun {
-    for (final run in runs.reversed) {
-      if (_activeRunStatuses.contains(run.status)) return run;
-    }
-    return runs.isEmpty ? null : runs.last;
+    final index = activeRunIndex;
+    return index == null ? null : runs[index];
   }
 
   factory Task.fromJson(Map<String, dynamic> json) {

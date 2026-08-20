@@ -29,4 +29,15 @@ abstract interface class TaskRepository {
     List<String> filePaths,
     Map<String, dynamic>? outputParams,
   );
+
+  /// 下载任务输出文件到本地路径（远程连接导出用）。
+  /// [runIndex]/[outputIndex] 由服务端解析为该 run 的输出文件；
+  /// [onProgress] 回调 (已接收字节, 总字节)。
+  Future<void> downloadOutputFile({
+    required int taskId,
+    required int runIndex,
+    required int outputIndex,
+    required String savePath,
+    void Function(int count, int total)? onProgress,
+  });
 }
