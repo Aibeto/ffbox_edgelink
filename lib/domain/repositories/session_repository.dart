@@ -15,7 +15,7 @@ class Session {
   });
 }
 
-/// 会话存储抽象接口。用于持久化服务器地址与登录凭证。
+/// 会话存储抽象接口：持久化服务器地址与登录凭证。
 abstract interface class SessionRepository {
   Future<Session?> load();
   Future<void> save(Session session);

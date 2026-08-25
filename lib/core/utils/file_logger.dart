@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 文件日志工具类，用于将诊断日志写入文件。
+/// 文件日志工具：把诊断日志写入文件。
 ///
 /// 功能：
 /// - 将日志写入应用文档目录下的 logs 文件夹
